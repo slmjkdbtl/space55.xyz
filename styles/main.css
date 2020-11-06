@@ -1,0 +1,186 @@
+/* wengwengweng */
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+	user-select: none;
+	cursor: url(/img/cursors/1.png), default;
+}
+
+.obj:hover,
+#randomlink:hover,
+#dino #flower:hover,
+.box,
+.img:hover,
+a:hover {
+	cursor: url(/img/cursors/2.png), pointer;
+}
+
+a {
+	outline: 0;
+}
+
+html {
+	width: 100%;
+}
+
+body {
+	width: 100%;
+	background: #000;
+	text-align: center;
+}
+
+.box {
+	height: auto;
+}
+
+.box .img {
+	width: 100%;
+	height: auto;
+	transition: 0.5s;
+}
+
+.box .img:hover {
+	transform: scale(0.9);
+}
+
+#dino {
+	position: relative;
+	width: 64%;
+	margin: 0 auto;
+}
+
+@media screen and (max-width: 960px) {
+	#dino {
+		width: 84%;
+		height: calc(84% * .75);
+	}
+}
+
+@media screen and (max-width: 640px) {
+	#dino {
+		width: 96%;
+		height: calc(96% * .75);
+		margin-top: 24px;
+	}
+}
+
+#dino #body {
+	width: 100%;
+	height: auto;
+}
+
+#dino #flower {
+	position: absolute;
+	top: 11%;
+	left: 31%;
+	width: 10%;
+	height: auto;
+}
+
+#title {
+	display: block;
+	width: 32%;
+	height: auto;
+	margin: 32px auto;
+	padding: 1px;
+}
+
+@media screen and (max-width: 960px) {
+	#title {
+		width: 48%;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	#title {
+		width: 72%;
+	}
+}
+
+.wrapper {
+	width: 80%;
+	margin: 24px auto;
+	display: flex;
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+
+.wrapper.games .box {
+	width: 33%;
+}
+
+@media screen and (max-width: 960px) {
+	.wrapper.games .box {
+		width: 45%;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	.wrapper.games .box {
+		width: 100%;
+	}
+}
+
+.wrapper.sites .box {
+	width: 25%;
+}
+
+@media screen and (max-width: 640px) {
+	.wrapper.sites .box {
+		width: 100%;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	.wrapper {
+		margin-top: -32px;
+	}
+}
+
+#randomlink {
+	display: block;
+	width: 36%;
+	height: auto;
+	margin: 0 auto;
+	transition: 0.25s;
+}
+
+@media screen and (max-width: 960px) {
+	#randomlink {
+		width: 64%;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	#randomlink {
+		width: 84%;
+	}
+}
+
+#randomlink:hover {
+	transform: scale(1.05);
+}
+
+#elsewhere {
+	display: block;
+	width: 54%;
+	height: auto;
+	margin-top: 48px;
+	margin-left: 8%;
+	transition: 0.25s;
+}
+
+@media screen and (max-width: 960px) {
+	#elsewhere {
+		width: 64%;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	#elsewhere {
+		width: 84%;
+	}
+}
+
