@@ -137,6 +137,17 @@ function dir(path)
 	})
 end
 
+function redirect(link)
+	return function(req)
+		return {
+			status = 307,
+			headers = {
+				["Location"] = link,
+			},
+		}
+	end
+end
+
 function randomlink(req)
 	return {
 		status = 307,
@@ -171,6 +182,7 @@ http.serve(port, httph.handlers({
 	httph.route("GET", "/favicon.ico", httph.file("img/icon.png")),
 	httph.route("GET", "/randomlink", randomlink),
 	httph.route("GET", "/files", httph.html(dir("files"))),
+	httph.route("GET", "/dirty", redirect("https://github.com/slmjkdbtl/dirty")),
 	httph.static("."),
 	no,
 }))

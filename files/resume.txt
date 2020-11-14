@@ -1,1 +1,30 @@
-todo
+Tiga Wu
+http://space55.xyz/
+tga@space55.xyz
+
+Software, Games, Interactive Experiences.
+
+Experiences
+===
+Replit (2020 - current)
+- developing an integrated game programming environment on the web
+Gamecores (2019)
+- designed and developed 3 built-in games & apps for DEOT (a linux based handheld gaming console)
+
+Education
+===
+Parsone School of Design (2016 - 2020, BFA)
+
+Skills
+===
+- Web Development (HTML, JavaScript, CSS)
+- Game Development (C, Rust, Lua)
+- General Tech (Linux, Git)
+- UI/UX Design
+
+Projects
+===
+dirty
+http://space55.xyz/dirty
+personal game engine
+

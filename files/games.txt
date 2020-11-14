@@ -90,6 +90,8 @@ Tokyo Wakusei Planetokio
 Gaball Screen
 Jumping Flash!
 Rhythm 'N Face
+Oddworld: Abe's Oddysee
+Battle Arena Toshinden
 
 PS2
 ---
@@ -130,7 +132,6 @@ Earthbound
 Uniracers
 Virtual Bart
 Push-Over
-Lemmings
 Ihatovo Monogatari
 Pocky & Rocky
 Pocky & Rocky 2
@@ -166,19 +167,25 @@ DOS
 ---
 Helious
 Helious II
+Dinosaur Predators
+Jones in the Fast Lane
+Albion
+Zephyr
 
 Amiga
 -----
 Knights of the Crystallion
-
-Board Game
-----------
-Dune
-Coatl
-Consentacle
-Twilight Struggle
-Pandemic
-Taikyoku Shogi
+Another World
+Captain Blood
+Lemmings
+Populous
+Freedom: Rebels in the Darkness
+Geisha
+Loom
+Purple Saturn Day
+Speedball
+Wizball
+Wizkid: The Story of Wizball II
 
 Apple
 -----
@@ -191,10 +198,21 @@ Gridz
 Eastern Mind: The Lost Souls of Tong Nou
 Chu-Teng
 Roly-Polys no Nanakorobi Yaoki
+Chaos Overlords
+Myst
 
 Windows
 -------
 The Saboten Man
+
+Board Game
+----------
+Dune
+Coatl
+Consentacle
+Twilight Struggle
+Pandemic
+Taikyoku Shogi
 
 Game Makers
 -----------
@@ -203,4 +221,6 @@ Michael Brough
 thecatamites
 increpare
 Mason Lindroth
+Andi Hagen
+Blueberry Soft
 
