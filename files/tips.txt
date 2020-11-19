@@ -1,6 +1,5 @@
 - every button press and input should trigger some instant audio and visual treatment
 - if your game has music, make on-beat interactions no matter what the game is about
-- huge dragon flying through the sky after 5 hours of game time
 - collectables is a must
-- everything inside a game should be a game
 - a burp sound effect should at least be triggered somewhere in the game
+- no "no fun zone" - a 3 year old accidentally hit the menu button and don't know how to go back? then at least the menu screen should be fun!
