@@ -5,6 +5,6 @@ local port = os.getenv("PORT") or 80
 print("http://localhost:" .. port)
 
 http.serve(port, function(req)
-	return require("server")(req)
+	return dofile("serve.lua")(req)
 end)
 
