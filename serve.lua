@@ -1,7 +1,9 @@
 -- wengwengweng
 
+-- TODO: cache all images
+
 local t = www.tag
-local links = string.split(fs.read_text("files/links.txt"), "\n")
+local links = string.split(fs.read("files/links.txt"), "\n")
 
 local gamedata = {
 	{
@@ -323,7 +325,7 @@ local home = t("html", {}, {
 	t("body", {}, {
 		t("div", { id = "dino", }, {
 			t("img", { id = "body", src = www.base64("img/drawings/dino.png"), alt = "dino" }),
-			t("img", { id = "flower", class = "obj", src = www.base64("img/drawings/flower1.png"), alt = "flower" }),
+			t("img", { id = "flower", class = "obj", alt = "flower" }),
 		}),
 		t("img", { id = "title", src = www.base64("img/misc/title.png"), alt = "title", }),
 		t("div", { class = "games wrapper", }, table.map(gamedata, function(data)
@@ -340,18 +342,9 @@ local home = t("html", {}, {
 				t("img", { class = "img obj", src = www.base64("img/sites/" .. data.name .. ".png"), alt = data.name, })
 			})
 		end)),
-		t("script", {}, fs.read_text("scripts/main.js")),
+		t("script", {}, fs.read("scripts/main.js")),
 	}),
 })
-
-function randomlink(req)
-	return {
-		status = 307,
-		headers = {
-			["Location"] = links[math.random(#links)],
-		},
-	}
-end
 
 function no()
 	return {
@@ -382,11 +375,26 @@ return function(req)
 	end
 
 	if req.target == "/randomlink" then
-		return randomlink()
+		return www.redirect(links[math.random(#links)])
 	end
 
-	if req.target == "/files" then
-		return www.dir("files")
+	if req.target == "/diary" then
+		return www.dir("diary")
+	end
+
+	if req.target:match("^/diary") then
+		local entry = req.target:gsub("^/diary/", "")
+		if entry then
+			return {
+				status = 200,
+				headers = {
+					["Content-Type"] = "text/plain; charset=utf-8",
+				},
+				body = fs.read("diary/" .. entry)
+			}
+		else
+			return www.dir("diary")
+		end
 	end
 
 	if req.target == "/dirty" then
