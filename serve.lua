@@ -349,17 +349,19 @@ local home = t("html", {}, {
 function no()
 	return {
 		status = 404,
-		body = "no",
+		body = "nope",
 	}
 end
 
 return function(req)
 
 	if req.headers["User-Agent"] and string.match(req.headers["User-Agent"], "curl") then
-		return {
-			status = 200,
-			body = "oh hi!\n",
-		}
+		if req.target == "/" then
+			return {
+				status = 200,
+				body = "oh hi!\n",
+			}
+		end
 	end
 
 	if req.method ~= "GET" then
@@ -398,11 +400,19 @@ return function(req)
 	end
 
 	if req.target == "/dirty" then
-		return www.redirect("https://github.com/slmjkdbtl/dirty")
+		return www.redirect("/dirty.h")
+	end
+
+	if req.target == "/dirty.h" then
+		return www.file("files/dirty.h")
 	end
 
 	if req.target == "/fserv" then
 		return www.redirect("https://github.com/slmjkdbtl/fserv")
+	end
+
+	if req.target == "/resume" then
+		return www.file("files/resume.txt")
 	end
 
 	local path = req.target:sub(2, #req.target)
