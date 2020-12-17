@@ -399,14 +399,6 @@ return function(req)
 		end
 	end
 
-	if req.target == "/dirty" then
-		return www.redirect("/dirty.h")
-	end
-
-	if req.target == "/dirty.h" then
-		return www.file("files/dirty.h")
-	end
-
 	if req.target == "/fserv" then
 		return www.redirect("https://github.com/slmjkdbtl/fserv")
 	end
@@ -415,10 +407,17 @@ return function(req)
 		return www.file("files/resume.txt")
 	end
 
+	local exposed = { "diary", "dirty", }
 	local path = req.target:sub(2, #req.target)
 
-	if (fs.is_file(path)) then
-		return www.file(path)
+	for _, v in ipairs(exposed) do
+		if (path:match("^" .. v)) then
+			if (fs.is_file(path)) then
+				return www.file(path)
+			elseif (fs.is_dir(path)) then
+				return www.dir(path)
+			end
+		end
 	end
 
 	return no()
