@@ -247,12 +247,16 @@ function escapeHTML(unsafe) {
 		.replace(/'/g, "&#039")
 }
 
-const csslib = {
+
+// TODO: a way to only generate used classes, record in h()?
+// TODO: deal with :hover etc
+// tailwind-like css helpers
+const csslibBase = {
 	".vstack": {
 		"display": "flex",
 		"flex-direction": "column",
 	},
-	".rvstack": {
+	".vstack-reverse": {
 		"display": "flex",
 		"flex-direction": "column-reverse",
 	},
@@ -260,7 +264,7 @@ const csslib = {
 		"display": "flex",
 		"flex-direction": "row",
 	},
-	".rhstack": {
+	".hstack-reverse": {
 		"display": "flex",
 		"flex-direction": "row-reverse",
 	},
@@ -284,23 +288,61 @@ const csslib = {
 	".text-center": { "text-align": "center" },
 	".text-left": { "text-align": "left" },
 	".text-right": { "text-align": "right" },
-	".text-center": { "text-align": "center" },
 	".wrap": { "flex-wrap": "wrap" },
-	".rwrap": { "flex-wrap": "wrap-reverse" },
+	".wrap-reverse": { "flex-wrap": "wrap-reverse" },
 	".nowrap": { "flex-wrap": "no-wrap" },
 }
 
-const spacings = [ 4, 8, 12, 16, 24, 32, 48, 64, 128 ]
+for (let i = 4; i <= 128; i += 4) {
+	csslibBase[`.g${i}`] = { "gap": `${i}px` }
+	csslibBase[`.p${i}`] = { "padding": `${i}px` }
+	csslibBase[`.px${i}`] = { "padding-x": `${i}px` }
+	csslibBase[`.py${i}`] = { "padding-y": `${i}px` }
+	csslibBase[`.m${i}`] = { "margin": `${i}px` }
+	csslibBase[`.mx${i}`] = { "margin-x": `${i}px` }
+	csslibBase[`.my${i}`] = { "margin-y": `${i}px` }
+	csslibBase[`.f${i}`] = { "font-size": `${i}px` }
+	csslibBase[`.r${i}`] = { "border-radius": `${i}px` }
+}
 
-for (const spacing of spacings) {
-	csslib[`.g${spacing}`] = { "gap": `${spacing}px` }
-	csslib[`.p${spacing}`] = { "padding": `${spacing}px` }
-	csslib[`.px${spacing}`] = { "padding-x": `${spacing}px` }
-	csslib[`.py${spacing}`] = { "padding-y": `${spacing}px` }
-	csslib[`.m${spacing}`] = { "margin": `${spacing}px` }
-	csslib[`.mx${spacing}`] = { "margin-x": `${spacing}px` }
-	csslib[`.my${spacing}`] = { "margin-y": `${spacing}px` }
-	csslib[`.f${spacing}`] = { "font-size": `${spacing}px` }
+const breakpoints = {
+	"sm": 640,
+	"md": 768,
+	"lg": 1024,
+	"xl": 1280,
+}
+
+function compileStyles(sheet) {
+	let css = ""
+	for (const sel in sheet) {
+		const styles = sheet[sel]
+		css += `${sel} {` + nl
+		for (const style in styles) {
+			css += `${style}: ${styles[style]};` + nl
+		}
+		css += `}` + nl
+	}
+	return css
+}
+
+function mapKeys(obj, mapFn) {
+	return Object.keys(obj).reduce((result, key) => {
+		result[mapFn(key)] = obj[key]
+		return result
+	}, {})
+}
+
+let csslib = compileStyles(csslibBase)
+
+for (const bp in breakpoints) {
+	csslib += `@media (min-width: ${breakpoints[bp]}px) {` + nl
+	for (const sel in csslibBase) {
+		csslib += compileStyles(mapKeys(csslibBase, () => {
+			const name = sel.substring(1)
+			return `.${bp}:${name}`
+		}))
+	}
+	csslib += `}` + nl
 }
 
 export {
