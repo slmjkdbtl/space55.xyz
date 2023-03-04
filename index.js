@@ -326,7 +326,7 @@ export default "<!DOCTYPE html>" + h("html", {}, [
 		h("div", { class: "games wrapper", }, games.map((game) => h("a", { class: "box obj", href: game.link }, [
 			h("img", { class: "img obj", src: game.img, alt: game.name, }),
 		]))),
-		h("a", { href: "/randomlink", }, [
+		h("a", { href: "/randomlink", target: "_blank" }, [
 			h("img", { id: "randomlink", class: "obj", src: "/static/img/misc/randomlink.png", alt: "random link", }),
 		]),
 		h("img", { id: "elsewhere", src: "/static/img/misc/elsewhere.png", alt: "elsewhere", }),

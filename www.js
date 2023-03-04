@@ -115,7 +115,16 @@ function matchUrl(pat, url) {
 
 }
 
-function html(content, props) {
+function redirect(link, status = 307) {
+	return new Response(null, {
+		status: status,
+		headers: {
+			"Location": link,
+		},
+	})
+}
+
+function html(content) {
 	return new Response(content, {
 		headers: {
 			"Content-Type": "text/html; charset=utf-8",
@@ -352,4 +361,5 @@ export {
 	escapeHTML,
 	csslib,
 	html,
+	redirect,
 }
