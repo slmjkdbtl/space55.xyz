@@ -1,1 +1,1 @@
-ls *.js | entr -r bun run main.js
+bun --hot main.js

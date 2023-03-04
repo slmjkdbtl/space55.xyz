@@ -1,4 +1,4 @@
-import { tag as t, style } from "./www.js"
+import { h, style } from "./www.js"
 
 const games = [
 	{
@@ -308,31 +308,31 @@ const styles = {
 	},
 
 }
-export default "<!DOCTYPE html>" + t("html", {}, [
-	t("head", {}, [
-		t("title", {}, "tga"),
-		t("meta", { charset: "utf-8", }),
-		t("meta", { name: "description", content: "tga's homepage", }),
-		t("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
-		t("link", { rel: "icon", href: "/static/img/icon.png" }),
-		t("style", {}, style(styles)),
+export default "<!DOCTYPE html>" + h("html", {}, [
+	h("head", {}, [
+		h("title", {}, "tga"),
+		h("meta", { charset: "utf-8", }),
+		h("meta", { name: "description", content: "tga's homepage", }),
+		h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
+		h("link", { rel: "icon", href: "/static/img/icon.png" }),
+		h("style", {}, style(styles)),
 	]),
-	t("body", {}, [
-		t("div", { id: "dino", }, [
-			t("img", { id: "body", src: "/static/img/drawings/dino.png", alt: "dino" }),
-			t("img", { id: "flower", class: "obj", alt: "flower" }),
+	h("body", {}, [
+		h("div", { id: "dino", }, [
+			h("img", { id: "body", src: "/static/img/drawings/dino.png", alt: "dino" }),
+			h("img", { id: "flower", class: "obj", alt: "flower" }),
 		]),
-		t("img", { id: "title", src: "/static/img/misc/title.png", alt: "title", }),
-		t("div", { class: "games wrapper", }, games.map((game) => t("a", { class: "box obj", href: game.link }, [
-			t("img", { class: "img obj", src: game.img, alt: game.name, }),
+		h("img", { id: "title", src: "/static/img/misc/title.png", alt: "title", }),
+		h("div", { class: "games wrapper", }, games.map((game) => h("a", { class: "box obj", href: game.link }, [
+			h("img", { class: "img obj", src: game.img, alt: game.name, }),
 		]))),
-		t("a", { href: "/randomlink", }, [
-			t("img", { id: "randomlink", class: "obj", src: "/static/img/misc/randomlink.png", alt: "random link", }),
+		h("a", { href: "/randomlink", }, [
+			h("img", { id: "randomlink", class: "obj", src: "/static/img/misc/randomlink.png", alt: "random link", }),
 		]),
-		t("img", { id: "elsewhere", src: "/static/img/misc/elsewhere.png", alt: "elsewhere", }),
-		t("div", { class: "sites wrapper", }, sites.map((site) => t("a", { class: "box obj", href: site.link }, [
-			t("img", { class: "img obj", src: `/static/img/sites/${site.name}.png`, alt: site.name, })
+		h("img", { id: "elsewhere", src: "/static/img/misc/elsewhere.png", alt: "elsewhere", }),
+		h("div", { class: "sites wrapper", }, sites.map((site) => h("a", { class: "box obj", href: site.link }, [
+			h("img", { class: "img obj", src: `/static/img/sites/${site.name}.png`, alt: site.name, })
 		]))),
-		t("script", { src: "/static/scripts/main.js" }, ""),
+		h("script", { src: "/static/scripts/main.js" }, ""),
 	]),
 ])

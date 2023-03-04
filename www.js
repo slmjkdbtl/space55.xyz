@@ -75,7 +75,7 @@ function createServer() {
 		put: genMethodHandler("PUT"),
 		del: genMethodHandler("DEL"),
 		start: (port, hostname) => {
-			Bun.serve({
+			return Bun.serve({
 				port: port,
 				hostname: hostname,
 				fetch: fetch,
@@ -123,10 +123,10 @@ function html(content, props) {
 	})
 }
 
-const nl = process.env.NODE_ENV === "development" ? "\n" : ""
+const nl = process.env.NODE_ENV === "production" ? "" : "\n"
 
-// html builder
-function tag(tagname, attrs, children) {
+// html text builder
+function h(tagname, attrs, children) {
 
 	let html = `<${tagname}`
 
@@ -158,7 +158,7 @@ function tag(tagname, attrs, children) {
 				continue
 			}
 			if (Array.isArray(child)) {
-				html += tag("div", {}, child)
+				html += h("div", {}, child)
 			} else {
 				html += child
 			}
@@ -304,7 +304,7 @@ for (const spacing of spacings) {
 }
 
 export {
-	tag,
+	h,
 	style,
 	createServer,
 	escapeHTML,
