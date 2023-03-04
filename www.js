@@ -249,25 +249,13 @@ function escapeHTML(unsafe) {
 
 
 // TODO: a way to only generate used classes, record in h()?
-// TODO: deal with :hover etc
+// TODO: deal with pseudos like :hover
 // tailwind-like css helpers
 const csslibBase = {
-	".vstack": {
-		"display": "flex",
-		"flex-direction": "column",
-	},
-	".vstack-reverse": {
-		"display": "flex",
-		"flex-direction": "column-reverse",
-	},
-	".hstack": {
-		"display": "flex",
-		"flex-direction": "row",
-	},
-	".hstack-reverse": {
-		"display": "flex",
-		"flex-direction": "row-reverse",
-	},
+	".vstack": { "display": "flex", "flex-direction": "column" },
+	".hstack": { "display": "flex", "flex-direction": "row" },
+	".vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
+	".hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
 	".stretch-x": { "width": "100%" },
 	".stretch-y": { "height": "100%" },
 	".bold": { "font-weight": "bold" },
@@ -285,12 +273,23 @@ const csslibBase = {
 	".justify-between": { "justify-content": "space-between" },
 	".justify-around": { "justify-content": "space-around" },
 	".justify-evenly": { "justify-content": "space-evenly" },
+	".align-self-start": { "align-items": "flex-start" },
+	".align-self-end": { "align-self": "flex-end" },
+	".align-self-center": { "align-self": "center" },
+	".align-self-stretch": { "align-self": "stretch" },
+	".align-self-baseline": { "align-self": "baseline" },
 	".text-center": { "text-align": "center" },
 	".text-left": { "text-align": "left" },
 	".text-right": { "text-align": "right" },
 	".wrap": { "flex-wrap": "wrap" },
 	".wrap-reverse": { "flex-wrap": "wrap-reverse" },
 	".nowrap": { "flex-wrap": "no-wrap" },
+}
+
+for (let i = 1; i <= 8; i++) {
+	csslibBase[`.grow-${i}}`] = { "flex-grow": i }
+	csslibBase[`.shrink-${i}}`] = { "flex-shrink": i }
+	csslibBase[`.flex-${i}}`] = { "flex-grow": i, "flex-shrink": i }
 }
 
 for (let i = 4; i <= 128; i += 4) {
@@ -311,6 +310,12 @@ const breakpoints = {
 	"lg": 1024,
 	"xl": 1280,
 }
+
+const pseudos = [
+	"hover",
+	"active",
+	"focus",
+]
 
 function compileStyles(sheet) {
 	let css = ""
@@ -336,12 +341,7 @@ let csslib = compileStyles(csslibBase)
 
 for (const bp in breakpoints) {
 	csslib += `@media (min-width: ${breakpoints[bp]}px) {` + nl
-	for (const sel in csslibBase) {
-		csslib += compileStyles(mapKeys(csslibBase, () => {
-			const name = sel.substring(1)
-			return `.${bp}:${name}`
-		}))
-	}
+	csslib += compileStyles(mapKeys(csslibBase, (sel) => `.${bp}:${sel.substring(1)}`))
 	csslib += `}` + nl
 }
 
