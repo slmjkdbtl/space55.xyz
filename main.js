@@ -7,7 +7,7 @@ const links = linksText.split("\n").filter((l) => l)
 
 server.files("/static/", "static")
 server.get("/", () => html(index))
-server.get("/randomlink", () => redirect(links[Math.floor(Math.random() * links.length)]))
+server.get("/randomlink", () => redirect(links[Math.floor(Math.random() * links.length)], 303))
 
 export default {
 	port: 4000,

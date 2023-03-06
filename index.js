@@ -1,4 +1,4 @@
-import { h, style } from "./www.js"
+import { h, css } from "./www.js"
 
 const games = [
 	{
@@ -286,7 +286,6 @@ const styles = {
 	},
 
 	"@keyframes": {
-
 		"happy": {
 			"0%": {
 				"content": "url(/static/img/drawings/flower1.png)",
@@ -304,7 +303,6 @@ const styles = {
 				"content": "url(/static/img/drawings/flower1.png)",
 			},
 		},
-
 	},
 
 }
@@ -315,7 +313,7 @@ export default "<!DOCTYPE html>" + h("html", {}, [
 		h("meta", { name: "description", content: "tga's homepage", }),
 		h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
 		h("link", { rel: "icon", href: "/static/img/icon.png" }),
-		h("style", {}, style(styles)),
+		h("style", {}, css(styles)),
 	]),
 	h("body", {}, [
 		h("div", { id: "dino", }, [

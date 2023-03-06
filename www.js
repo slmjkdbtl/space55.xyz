@@ -124,8 +124,9 @@ function redirect(link, status = 307) {
 	})
 }
 
-function html(content) {
+function html(content, status = 200) {
 	return new Response(content, {
+		status: status,
 		headers: {
 			"Content-Type": "text/html; charset=utf-8",
 		},
@@ -185,9 +186,17 @@ function h(tagname, attrs, children) {
 const camelToKababCase = (str) =>
 	str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
 
+function style(sheet) {
+	let style = ""
+	for (const prop in sheet) {
+		style += `${prop}: ${sheet[prop]};`
+	}
+	return style
+}
+
 // TODO: @font-face
 // sass-like css preprocessor
-function style(list) {
+function css(list) {
 
 	let text = ""
 
@@ -256,110 +265,106 @@ function escapeHTML(unsafe) {
 		.replace(/'/g, "&#039")
 }
 
-
 // TODO: a way to only generate used classes, record in h()?
 // TODO: deal with pseudos like :hover
-// tailwind-like css helpers
-const csslibBase = {
-	".vstack": { "display": "flex", "flex-direction": "column" },
-	".hstack": { "display": "flex", "flex-direction": "row" },
-	".vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
-	".hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
-	".stretch-x": { "width": "100%" },
-	".stretch-y": { "height": "100%" },
-	".bold": { "font-weight": "bold" },
-	".italic": { "font-style": "italic" },
-	".underline": { "font-decoration": "underline" },
-	".center": { "align-items": "center", "justify-content": "center" },
-	".align-start": { "align-items": "flex-start" },
-	".align-end": { "align-items": "flex-end" },
-	".align-center": { "align-items": "center" },
-	".align-stretch": { "align-items": "stretch" },
-	".align-baseline": { "align-items": "baseline" },
-	".justify-start": { "justify-content": "flex-start" },
-	".justify-end": { "justify-content": "flex-end" },
-	".justify-center": { "justify-content": "center" },
-	".justify-between": { "justify-content": "space-between" },
-	".justify-around": { "justify-content": "space-around" },
-	".justify-evenly": { "justify-content": "space-evenly" },
-	".align-self-start": { "align-items": "flex-start" },
-	".align-self-end": { "align-self": "flex-end" },
-	".align-self-center": { "align-self": "center" },
-	".align-self-stretch": { "align-self": "stretch" },
-	".align-self-baseline": { "align-self": "baseline" },
-	".text-center": { "text-align": "center" },
-	".text-left": { "text-align": "left" },
-	".text-right": { "text-align": "right" },
-	".wrap": { "flex-wrap": "wrap" },
-	".wrap-reverse": { "flex-wrap": "wrap-reverse" },
-	".nowrap": { "flex-wrap": "no-wrap" },
-}
+function csslib(opt = {}) {
 
-for (let i = 1; i <= 8; i++) {
-	csslibBase[`.grow-${i}}`] = { "flex-grow": i }
-	csslibBase[`.shrink-${i}}`] = { "flex-shrink": i }
-	csslibBase[`.flex-${i}}`] = { "flex-grow": i, "flex-shrink": i }
-}
-
-for (let i = 4; i <= 128; i += 4) {
-	csslibBase[`.g${i}`] = { "gap": `${i}px` }
-	csslibBase[`.p${i}`] = { "padding": `${i}px` }
-	csslibBase[`.px${i}`] = { "padding-x": `${i}px` }
-	csslibBase[`.py${i}`] = { "padding-y": `${i}px` }
-	csslibBase[`.m${i}`] = { "margin": `${i}px` }
-	csslibBase[`.mx${i}`] = { "margin-x": `${i}px` }
-	csslibBase[`.my${i}`] = { "margin-y": `${i}px` }
-	csslibBase[`.f${i}`] = { "font-size": `${i}px` }
-	csslibBase[`.r${i}`] = { "border-radius": `${i}px` }
-}
-
-const breakpoints = {
-	"sm": 640,
-	"md": 768,
-	"lg": 1024,
-	"xl": 1280,
-}
-
-const pseudos = [
-	"hover",
-	"active",
-	"focus",
-]
-
-function compileStyles(sheet) {
-	let css = ""
-	for (const sel in sheet) {
-		const styles = sheet[sel]
-		css += `${sel} {` + nl
-		for (const style in styles) {
-			css += `${style}: ${styles[style]};` + nl
-		}
-		css += `}` + nl
+	// tailwind-like css helpers
+	const base = {
+		".vstack": { "display": "flex", "flex-direction": "column" },
+		".hstack": { "display": "flex", "flex-direction": "row" },
+		".vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
+		".hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
+		".stretch-x": { "width": "100%" },
+		".stretch-y": { "height": "100%" },
+		".bold": { "font-weight": "bold" },
+		".italic": { "font-style": "italic" },
+		".underline": { "font-decoration": "underline" },
+		".center": { "align-items": "center", "justify-content": "center" },
+		".align-start": { "align-items": "flex-start" },
+		".align-end": { "align-items": "flex-end" },
+		".align-center": { "align-items": "center" },
+		".align-stretch": { "align-items": "stretch" },
+		".align-baseline": { "align-items": "baseline" },
+		".justify-start": { "justify-content": "flex-start" },
+		".justify-end": { "justify-content": "flex-end" },
+		".justify-center": { "justify-content": "center" },
+		".justify-between": { "justify-content": "space-between" },
+		".justify-around": { "justify-content": "space-around" },
+		".justify-evenly": { "justify-content": "space-evenly" },
+		".align-self-start": { "align-items": "flex-start" },
+		".align-self-end": { "align-self": "flex-end" },
+		".align-self-center": { "align-self": "center" },
+		".align-self-stretch": { "align-self": "stretch" },
+		".align-self-baseline": { "align-self": "baseline" },
+		".text-center": { "text-align": "center" },
+		".text-left": { "text-align": "left" },
+		".text-right": { "text-align": "right" },
+		".wrap": { "flex-wrap": "wrap" },
+		".wrap-reverse": { "flex-wrap": "wrap-reverse" },
+		".nowrap": { "flex-wrap": "no-wrap" },
 	}
+
+	for (let i = 1; i <= 8; i++) {
+		base[`.grow-${i}}`] = { "flex-grow": i }
+		base[`.shrink-${i}}`] = { "flex-shrink": i }
+		base[`.flex-${i}}`] = { "flex-grow": i, "flex-shrink": i }
+	}
+
+	const spaces = [2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128]
+
+	for (const s of spaces) {
+		base[`.g${s}`] = { "gap": `${s}px` }
+		base[`.p${s}`] = { "padding": `${s}px` }
+		base[`.px${s}`] = { "padding-x": `${s}px` }
+		base[`.py${s}`] = { "padding-y": `${s}px` }
+		base[`.m${s}`] = { "margin": `${s}px` }
+		base[`.mx${s}`] = { "margin-x": `${s}px` }
+		base[`.my${s}`] = { "margin-y": `${s}px` }
+		base[`.f${s}`] = { "font-size": `${s}px` }
+		base[`.r${s}`] = { "border-radius": `${s}px` }
+	}
+
+	function compileStyles(sheet) {
+		let css = ""
+		for (const sel in sheet) {
+			const styles = sheet[sel]
+			css += `${sel} {` + nl
+			for (const style in styles) {
+				css += `${style}: ${styles[style]};` + nl
+			}
+			css += `}` + nl
+		}
+		return css
+	}
+
+	function mapKeys(obj, mapFn) {
+		return Object.keys(obj).reduce((result, key) => {
+			result[mapFn(key)] = obj[key]
+			return result
+		}, {})
+	}
+
+	let css = compileStyles(base)
+	const breakpoints = opt.breakpoints ?? {}
+
+	for (const bp in breakpoints) {
+		csslib += `@media (max-width: ${breakpoints[bp]}px) {` + nl
+		csslib += compileStyles(mapKeys(base, (sel) => `.${bp}:${sel.substring(1)}`))
+		csslib += `}` + nl
+	}
+
 	return css
-}
 
-function mapKeys(obj, mapFn) {
-	return Object.keys(obj).reduce((result, key) => {
-		result[mapFn(key)] = obj[key]
-		return result
-	}, {})
-}
-
-let csslib = compileStyles(csslibBase)
-
-for (const bp in breakpoints) {
-	csslib += `@media (min-width: ${breakpoints[bp]}px) {` + nl
-	csslib += compileStyles(mapKeys(csslibBase, (sel) => `.${bp}:${sel.substring(1)}`))
-	csslib += `}` + nl
 }
 
 export {
-	h,
-	style,
 	createServer,
-	escapeHTML,
-	csslib,
 	html,
 	redirect,
+	h,
+	css,
+	style,
+	csslib,
+	escapeHTML,
 }
