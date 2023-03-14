@@ -1,21 +1,18 @@
 // helpers for the world wide web with Bun
 
-function createServer() {
+import { statSync, readdirSync } from "fs"
+
+export function createServer() {
 
 	const handlers = []
+	const handle = (handler) => handlers.push(handler)
 
 	let handleError = (e) => {
-		console.error(e)
-		return new Response("Internal server error", {
-			status: 500,
-		})
+		console.error("Error:", e)
+		return new Response("Internal server error", { status: 500 })
 	}
 
-	let handleNotFound = () => {
-		return new Response("404", {
-			status: 404,
-		})
-	}
+	let handleNotFound = () => new Response("404", { status: 404 })
 
 	function handleMatch(req, pat, handler) {
 		const url = new URL(req.url)
@@ -30,10 +27,6 @@ function createServer() {
 				return handleMatch(req, pat, handler)
 			})
 		}
-	}
-
-	function handle(handler) {
-		handlers.push(handler)
 	}
 
 	async function fetch(req) {
@@ -58,15 +51,15 @@ function createServer() {
 		handle: handle,
 		error: (action) => handleError = action,
 		notFound: (action) => handleNotFound = action,
-		files: (route, root) => {
+		files: (route = "", root = "") => {
 			handle((req) => {
 				const url = new URL(req.url)
-				route = route.replace(/\/*$/, "")
-				if (!url.pathname.startsWith(route)) return
-				const path = "./" + root + url.pathname.replace(new RegExp(`^${route}`), "")
-				const file = Bun.file(path)
-				if (file.size === 0) return
-				return new Response(file)
+				route = trimSlashes(route)
+				root = trimSlashes(root)
+				const dir = "./" + root + (root ? "/" : "")
+				if (!url.pathname.startsWith("/" + route)) return
+				const path = dir + url.pathname.replace(new RegExp(`^/${route}/?`), "")
+				return res.file(path)
 			})
 		},
 		match: (pat, cb) => handle((req) => handleMatch(req, pat, handler)),
@@ -85,14 +78,12 @@ function createServer() {
 	}
 }
 
-function matchUrl(pat, url) {
+export function matchUrl(pat, url) {
 
 	pat = pat.replace(/\/$/, "")
 	url = url.replace(/\/$/, "")
 
-	if (pat === url) {
-		return {}
-	}
+	if (pat === url) return {}
 
 	const vars = pat.match(/:[^\/]+/g) || []
 	let regStr = pat
@@ -115,45 +106,126 @@ function matchUrl(pat, url) {
 
 }
 
-function redirect(link, status = 307) {
-	return new Response(null, {
+const trimSlashes = (str) => str.replace(/\/*$/, "").replace(/^\/*/, "")
+
+const isFile = (path) => {
+	try {
+		return statSync(path).isFile()
+	} catch {
+		return false
+	}
+}
+
+const isDir = (path) => {
+	try {
+		return statSync(path).isDirectory()
+	} catch {
+		return false
+	}
+}
+
+const getExt = (path) => path.split(".").pop()
+
+export const res = {
+	redirect: (link, status = 307) => new Response(null, {
 		status: status,
 		headers: {
 			"Location": link,
 		},
-	})
-}
-
-function html(content, status = 200) {
-	return new Response(content, {
+	}),
+	html: (content, status = 200) => new Response(content, {
 		status: status,
 		headers: {
 			"Content-Type": "text/html; charset=utf-8",
 		},
-	})
+	}),
+	file: (path) => {
+		if (!isFile(path)) return
+		const file = Bun.file(path)
+		if (file.size === 0) return
+		return new Response(file)
+	},
+	dir: (path) => {
+		if (!isDir(path)) return
+		const entries = readdirSync(path)
+			.filter((entry) => !entry.startsWith("."))
+			.sort((a, b) => a > b ? -1 : 1)
+			.sort((a, b) => getExt(a) > getExt(b) ? 1 : -1)
+		const files = []
+		const dirs = []
+		for (const entry of entries) {
+			if (isDir(entry)) {
+				dirs.push(entry)
+			} else {
+				files.push(entry)
+			}
+		}
+		return res.html("<!DOCTYPE html>" + h("html", { lang: "en" }, [
+			h("head", {}, [
+				h("title", {}, path),
+				h("style", {}, css({
+					"*": {
+						"margin": "0",
+						"padding": "0",
+						"box-sizing": "border-box",
+					},
+					"body": {
+						"padding": "16px",
+						"font-size": "16px",
+						"font-family": "Monospace",
+					},
+					"li": {
+						"list-style": "none",
+					},
+					"a": {
+						"color": "blue",
+						"text-decoration": "none",
+						":hover": {
+							"background": "blue",
+							"color": "white",
+						},
+					},
+				})),
+			]),
+			h("body", {}, [
+				h("ul", {}, [
+					...dirs.map((dir) => h("li", {}, [
+						h("a", { href: dir, }, dir + "/"),
+					])),
+					...files.map((file) => h("li", {}, [
+						h("a", { href: file, }, file),
+					])),
+				]),
+			]),
+		]))
+	},
 }
 
-const nl = process.env.NODE_ENV === "production" ? "" : "\n"
-
 // html text builder
-function h(tagname, attrs, children) {
+export function h(tagname, attrs, children) {
 
 	let html = `<${tagname}`
 
 	for (const k in attrs) {
 		let v = attrs[k]
-		switch (typeof(v)) {
+		switch (typeof v) {
 			case "boolean":
 				if (v === true) {
 					html += ` ${k}`
 				}
 				break
 			case "string":
-				if (typeof(v) === "string") {
-					v = `"${v}"`
-				}
+				html += ` ${k}="${v}"`
+				break
 			case "number":
 				html += ` ${k}=${v}`
+				break
+			case "object":
+				if (Array.isArray(v)) {
+					html += ` ${k}="${v.join(" ")}"`
+				} else {
+					html += ` ${k}="${style(v)}"`
+				}
 				break
 		}
 	}
@@ -164,9 +236,7 @@ function h(tagname, attrs, children) {
 		html += children
 	} else if (Array.isArray(children)) {
 		for (const child of children) {
-			if (!child) {
-				continue
-			}
+			if (!child) continue
 			if (Array.isArray(child)) {
 				html += h("div", {}, child)
 			} else {
@@ -176,7 +246,7 @@ function h(tagname, attrs, children) {
 	}
 
 	if (children !== undefined && children !== null) {
-		html += `</${tagname}>` + nl
+		html += `</${tagname}>`
 	}
 
 	return html
@@ -186,7 +256,7 @@ function h(tagname, attrs, children) {
 const camelToKababCase = (str) =>
 	str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
 
-function style(sheet) {
+export function style(sheet) {
 	let style = ""
 	for (const prop in sheet) {
 		style += `${prop}: ${sheet[prop]};`
@@ -196,28 +266,28 @@ function style(sheet) {
 
 // TODO: @font-face
 // sass-like css preprocessor
-function css(list) {
+export function css(list) {
 
 	let text = ""
 
 	function handleSheet(s) {
-		let t = "{" + nl
+		let t = "{"
 		for (const k in s) {
-			t += camelToKababCase(k) + ":" + s[k] + ";" + nl
+			t += camelToKababCase(k) + ":" + s[k] + ";"
 		}
-		t += "}" + nl
+		t += "}"
 		return t
 	}
 
 	function handleSheetEx(sel, sheet) {
-		let t = sel + " {" + nl
+		let t = sel + " {"
 		let post = ""
 		for (const key in sheet) {
 			const val = sheet[key]
 			// media
 			if (key === "@media") {
 				for (const cond in val) {
-					post += "@media " + cond + "{" + nl + sel + handleSheet(val[cond]) + "}" + nl
+					post += "@media " + cond + "{" + sel + handleSheet(val[cond]) + "}"
 				}
 			// pseudo class
 			} else if (key[0] === ":") {
@@ -229,10 +299,10 @@ function css(list) {
 			} else if (typeof(val) === "object") {
 				post += handleSheetEx(sel + " " + key, val)
 			} else {
-				t += camelToKababCase(key) + ":" + val + ";" + nl
+				t += camelToKababCase(key) + ":" + val + ";"
 			}
 		}
-		t += "}" + nl + post
+		t += "}" + post
 		return t
 	}
 
@@ -241,11 +311,11 @@ function css(list) {
 		if (sel === "@keyframes") {
 			for (const name in sheet) {
 				const map = sheet[name]
-				text += "@keyframes " + name + "{" + nl
+				text += "@keyframes " + name + "{"
 				for (const time in map) {
 					text += time + handleSheet(map[time])
 				}
-				text += "}" + nl
+				text += "}"
 			}
 		} else {
 			text += handleSheetEx(sel, sheet)
@@ -256,7 +326,7 @@ function css(list) {
 
 }
 
-function escapeHTML(unsafe) {
+export function escapeHTML(unsafe) {
 	return unsafe
 		.replace(/&/g, "&amp")
 		.replace(/</g, "&lt")
@@ -265,9 +335,16 @@ function escapeHTML(unsafe) {
 		.replace(/'/g, "&#039")
 }
 
+function mapKeys(obj, mapFn) {
+	return Object.keys(obj).reduce((result, key) => {
+		result[mapFn(key)] = obj[key]
+		return result
+	}, {})
+}
+
 // TODO: a way to only generate used classes, record in h()?
 // TODO: deal with pseudos like :hover
-function csslib(opt = {}) {
+export function csslib(opt = {}) {
 
 	// tailwind-like css helpers
 	const base = {
@@ -325,46 +402,23 @@ function csslib(opt = {}) {
 		base[`.r${s}`] = { "border-radius": `${s}px` }
 	}
 
-	function compileStyles(sheet) {
+	const compileStyles = (sheet) => {
 		let css = ""
 		for (const sel in sheet) {
-			const styles = sheet[sel]
-			css += `${sel} {` + nl
-			for (const style in styles) {
-				css += `${style}: ${styles[style]};` + nl
-			}
-			css += `}` + nl
+			css += `${sel} { ${style(sheet[sel])} } `
 		}
 		return css
-	}
-
-	function mapKeys(obj, mapFn) {
-		return Object.keys(obj).reduce((result, key) => {
-			result[mapFn(key)] = obj[key]
-			return result
-		}, {})
 	}
 
 	let css = compileStyles(base)
 	const breakpoints = opt.breakpoints ?? {}
 
 	for (const bp in breakpoints) {
-		csslib += `@media (max-width: ${breakpoints[bp]}px) {` + nl
+		csslib += `@media (max-width: ${breakpoints[bp]}px) {`
 		csslib += compileStyles(mapKeys(base, (sel) => `.${bp}:${sel.substring(1)}`))
-		csslib += `}` + nl
+		csslib += `}`
 	}
 
 	return css
 
-}
-
-export {
-	createServer,
-	html,
-	redirect,
-	h,
-	css,
-	style,
-	csslib,
-	escapeHTML,
 }
