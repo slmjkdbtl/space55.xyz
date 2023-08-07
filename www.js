@@ -1,15 +1,27 @@
 // helpers for the world wide web with Bun
 
-import { statSync, readdirSync } from "fs"
+import { Database } from "bun:sqlite"
+import * as fs from "fs"
+import * as path from "path"
+
+export const isDev = Boolean(Bun.env["DEV"])
 
 export function createServer() {
 
 	const handlers = []
 	const handle = (handler) => handlers.push(handler)
 
-	let handleError = (e) => {
-		console.error("Error:", e)
-		return new Response("Internal server error", { status: 500 })
+	let handleError = (req, err) => {
+		if (isDev) {
+			throw err
+		} else {
+			const url = new URL(req.url)
+			console.error(`Time: ${new Date()}`)
+			console.error(`Request: ${req.method} ${url.pathname}`)
+			console.error("")
+			console.error(err)
+			return new Response("Internal server error", { status: 500 })
+		}
 	}
 
 	let handleNotFound = () => new Response("404", { status: 404 })
@@ -66,7 +78,8 @@ export function createServer() {
 		get: genMethodHandler("GET"),
 		post: genMethodHandler("POST"),
 		put: genMethodHandler("PUT"),
-		del: genMethodHandler("DEL"),
+		delete: genMethodHandler("DELETE"),
+		patch: genMethodHandler("PATCH"),
 		start: (port, hostname) => {
 			return Bun.serve({
 				port: port,
@@ -76,6 +89,283 @@ export function createServer() {
 		},
 		fetch: fetch,
 	}
+}
+
+// TODO: support views
+// TODO: builtin cache system
+export function createDatabase(dbname, opts = {}) {
+
+	let uninitialized = !fs.existsSync(dbname)
+	const bdb = new Database(dbname)
+	const queries = {}
+	const tables = opts.tables ?? {}
+
+	function compile(sql) {
+		sql = sql.trim()
+		if (!queries[sql]) {
+			queries[sql] = bdb.query(sql)
+		}
+		return queries[sql]
+	}
+
+	// TODO: support OR
+	function genWhereSQL(cond, vars) {
+		return `WHERE ${Object.entries(cond).map(([k, v]) => {
+			if (typeof v === "object") {
+				vars[`$where_${k}`] = v.value
+				return `${k} ${v.op} $where_${k}`
+			} else {
+				vars[`$where_${k}`] = v
+				return `${k} = $where_${k}`
+			}
+		}).join(" AND ")}`
+	}
+
+	function genOrderSQL(cond) {
+		return `ORDER BY ${cond.columns.join(", ")}${cond.desc ? " DESC" : ""}`
+	}
+
+	function genLimitSQL(cond, vars) {
+		vars["$limit"] = cond
+		return `LIMIT $limit`
+	}
+
+	// TODO: support multiple values
+	function genValuesSQL(data, vars) {
+		return `VALUES (${Object.entries(data).map(([k, v]) => {
+			vars[`$value_${k}`] = v
+			return `$value_${k}`
+		}).join(", ")})`
+	}
+
+	function genSetSQL(data, vars) {
+		return `SET ${Object.entries(data).map(([k, v]) => {
+			vars[`$set_${k}`] = v
+			return `${k} = $set_${k}`
+		}).join(", ")}`
+	}
+
+	function genColumnSQL(name, opts) {
+		let code = name + " " + opts.type
+		if (opts.primaryKey) code += " PRIMARY KEY"
+		if (opts.autoIncrement) code += " AUTOINCREMENT"
+		if (!opts.allowNull) code += " NOT NULL"
+		if (opts.unique) code += " UNIQUE"
+		if (opts.default !== undefined) code += ` DEFAULT ${opts.default}`
+		if (opts.reference) code += ` REFERENCES ${opts.reference.table}(${opts.reference.column})`
+		return code
+	}
+
+	function genColumnsSQL(input) {
+		return Object.entries(input)
+			.map(([name, opts]) => "    " + genColumnSQL(name, opts))
+			.join(",\n")
+	}
+
+	function transaction(action) {
+		return bdb.transaction(action)()
+	}
+
+	// TODO: join
+	function select(table, opts = {}) {
+		if (!table) throw new Error("Cannot SELECT from database without table")
+		if (!tables[table]) throw new Error(`table doesn't exist: ${table}`)
+		const vars = {}
+		return compile(`
+SELECT${opts.distinct ? " DISTINCT" : ""} ${!opts.columns || opts.columns === "*" ? "*" : opts.columns.join(", ")}
+FROM ${table}
+${opts.where ? genWhereSQL(opts.where, vars) : ""}
+${opts.order ? genOrderSQL(opts.order, vars) : ""}
+${opts.limit ? genLimitSQL(opts.limit, vars) : ""}
+		`).all(vars) ?? []
+	}
+
+	function findAll(table, cond) {
+		return select(table, {
+			where: cond,
+		})
+	}
+
+	function find(table, cond) {
+		return select(table, {
+			where: cond,
+			limit: 1,
+		})[0]
+	}
+
+	// TODO: join
+	function search(table, text) {
+		if (!tables[table]) throw new Error(`table doesn't exist: ${table}`)
+		return compile(`
+SELECT * FROM ${table}_fts WHERE ${table}_fts MATCH $query ORDER BY rank
+		`).all({
+			"$query": text,
+		}) ?? []
+	}
+
+	function insert(table, data) {
+		if (!table || !data) {
+			throw new Error("Cannot INSERT into database without table / data")
+		}
+		if (!tables[table]) throw new Error(`table doesn't exist: ${table}`)
+		if (table.endsWith("_fts")) {
+			throw new Error("Cannot manually update a fts table")
+		}
+		const vars = {}
+		compile(`
+INSERT INTO ${table} (${Object.keys(data).join(", ")})
+${genValuesSQL(data, vars)}
+		`).run(vars)
+	}
+
+	function update(table, data, cond) {
+		if (!table || !data || !where) {
+			throw new Error("Cannot UPDATE database without table / data / where")
+		}
+		if (!tables[table]) throw new Error(`table doesn't exist: ${table}`)
+		if (table.endsWith("_fts")) {
+			throw new Error("Cannot manually update a fts table")
+		}
+		const vars = {}
+		const keys = Object.keys(data)
+		compile(`
+UPDATE ${table}
+${genSetSQL(data, vars)}
+${genWhereSQL(cond, vars)}
+		`).run(vars)
+	}
+
+	function remove(table, cond) {
+		if (!table || !cond) {
+			throw new Error("Cannot DELETE from database without table / where")
+		}
+		if (!tables[table]) throw new Error(`table doesn't exist: ${table}`)
+		if (table.endsWith("_fts")) {
+			throw new Error("Cannot manually update a fts table")
+		}
+		const vars = {}
+		compile(`
+DELETE FROM ${table}
+${genWhereSQL(cond, vars)}
+		`).run(vars)
+	}
+
+	function run(sql) {
+		bdb.run(sql.trim())
+	}
+
+	function create(table, cols) {
+		if (table.endsWith("_fts")) {
+			throw new Error("Table name cannot end with _fts")
+		}
+		if (opts.timeCreated && cols["time_created"]) {
+			throw new Error("Column time_created is reserved")
+		}
+		if (opts.timeUpdated && cols["time_updated"]) {
+			throw new Error("Column time_updated is reserved")
+		}
+		run(`
+CREATE TABLE ${table} (
+${genColumnsSQL({
+...cols,
+...(opts.timeCreated ? {
+	"time_created": { type: "TEXT", notNull: true, default: "CURRENT_TIMESTAMP" },
+} : {}),
+...(opts.timeUpdated ? {
+	"time_updated": { type: "TEXT", notNull: true, default: "CURRENT_TIMESTAMP" },
+} : {}),
+})}
+)
+		`)
+		const pks = []
+		const searches = []
+		for (const name in cols) {
+			const config = cols[name]
+			if (config.primaryKey) {
+				pks.push(name)
+			}
+			if (config.index) {
+				run(`
+CREATE INDEX idx_${table}_${name} ON ${table}(${name})
+				`)
+			}
+			if (config.search) {
+				searches.push(name)
+			}
+		}
+		if (opts.timeUpdated) {
+			run(`
+CREATE TRIGGER trigger_${table}_time_updated
+AFTER UPDATE ON ${table}
+BEGIN
+    UPDATE ${table}
+    SET time_updated = CURRENT_TIMESTAMP
+    WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
+END
+			`)
+		}
+		if (searches.length > 0) {
+			// TODO: content / content_rowid?
+			run(`
+CREATE VIRTUAL TABLE ${table}_fts USING fts5 (${[...pks, ...searches].join(", ")})
+			`)
+			run(`
+CREATE TRIGGER trigger_${table}_fts_insert
+AFTER INSERT ON ${table}
+BEGIN
+    INSERT INTO ${table}_fts (${[...pks, ...searches].join(", ")})
+    VALUES (${[...pks, ...searches].map((c) => `NEW.${c}`).join(", ")});
+END
+			`)
+			run(`
+CREATE TRIGGER trigger_${table}_fts_update
+AFTER UPDATE ON ${table}
+BEGIN
+    UPDATE ${table}_fts
+    SET ${searches.map((c) => `${c} = NEW.${c}`).join(", ")}
+    WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
+END
+			`)
+			run(`
+CREATE TRIGGER trigger_${table}_fts_delete
+AFTER DELETE ON ${table}
+BEGIN
+    DELETE FROM ${table}_fts
+    WHERE ${pks.map((pk) => `${pk} = OLD.${pk}`).join(" AND ")};
+END
+			`)
+		}
+	}
+
+	const db = {
+		select,
+		insert,
+		update,
+		delete: remove,
+		find,
+		findAll,
+		search,
+		transaction,
+		close: bdb.close,
+		serialize: bdb.serialize,
+	}
+
+	if (uninitialized) {
+		// TODO: auto migration?
+		if (opts.tables) {
+			transaction(() => {
+				for (const name in opts.tables) {
+					create(name, opts.tables[name])
+				}
+			})
+		}
+		if (opts.init) {
+			opts.init(db)
+		}
+	}
+
+	return db
+
 }
 
 export function matchUrl(pat, url) {
@@ -110,7 +400,7 @@ const trimSlashes = (str) => str.replace(/\/*$/, "").replace(/^\/*/, "")
 
 const isFile = (path) => {
 	try {
-		return statSync(path).isFile()
+		return fs.statSync(path).isFile()
 	} catch {
 		return false
 	}
@@ -118,39 +408,52 @@ const isFile = (path) => {
 
 const isDir = (path) => {
 	try {
-		return statSync(path).isDirectory()
+		return fs.statSync(path).isDirectory()
 	} catch {
 		return false
 	}
 }
 
-const getExt = (path) => path.split(".").pop()
-
 export const res = {
-	redirect: (link, status = 307) => new Response(null, {
-		status: status,
+	text: (content, opts = {}) => new Response(content, {
+		status: opts.status ?? 200,
 		headers: {
-			"Location": link,
+			"Content-Type": "text/plain; charset=utf-8",
+			...(opts.headers ?? {}),
 		},
 	}),
-	html: (content, status = 200) => new Response(content, {
-		status: status,
+	html: (content, opts = {}) => new Response(content, {
+		status: opts.status ?? 200,
 		headers: {
 			"Content-Type": "text/html; charset=utf-8",
+			...(opts.headers ?? {}),
 		},
 	}),
-	file: (path) => {
+	redirect: (link, opts = {}) => new Response(null, {
+		status: opts.status ?? 303,
+		headers: {
+			"Location": link,
+			...(opts.headers ?? {}),
+		},
+	}),
+	file: (path, opts = {}) => {
 		if (!isFile(path)) return
 		const file = Bun.file(path)
 		if (file.size === 0) return
-		return new Response(file)
+		return new Response(file, {
+			status: opts.status ?? 200,
+			headers: {
+				"Content-Type": file.type,
+				...(opts.headers ?? {}),
+			},
+		})
 	},
-	dir: (path) => {
+	dir: (path, opts = {}) => {
 		if (!isDir(path)) return
-		const entries = readdirSync(path)
+		const entries = fs.readdirSync(path)
 			.filter((entry) => !entry.startsWith("."))
 			.sort((a, b) => a > b ? -1 : 1)
-			.sort((a, b) => getExt(a) > getExt(b) ? 1 : -1)
+			.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
 		const files = []
 		const dirs = []
 		for (const entry of entries) {
@@ -197,8 +500,38 @@ export const res = {
 					])),
 				]),
 			]),
-		]))
+		]), opts)
 	},
+}
+
+export function getCookies(req) {
+	const str = req.headers.get("Cookie")
+	if (!str) return {}
+	const cookies = {}
+	for (const c of str.split(";")) {
+		const [k, v] = c.split("=")
+		cookies[k.trim()] = v.trim()
+	}
+	return cookies
+}
+
+export function kvList(props) {
+	return Object.entries(props)
+		.filter(([k, v]) => v)
+		.map(([k, v]) => k === true ? k : `${k}=${v}`)
+		.join("; ")
+}
+
+export async function getReqData(req) {
+	const ty = req.headers.get("Content-Type")
+	if (
+		ty.startsWith("application/x-www-form-urlencoded")
+		|| ty.startsWith("multipart/form-data")
+	) {
+		return (await req.formData()).toJSON()
+	} else {
+		return await req.json()
+	}
 }
 
 // html text builder
@@ -215,17 +548,14 @@ export function h(tagname, attrs, children) {
 				}
 				break
 			case "string":
-				html += ` ${k}="${v}"`
+				html += ` ${k}="${escapeHTML(v)}"`
 				break
 			case "number":
 				html += ` ${k}=${v}`
 				break
 			case "object":
-				if (Array.isArray(v)) {
-					html += ` ${k}="${v.join(" ")}"`
-				} else {
-					html += ` ${k}="${style(v)}"`
-				}
+				const value = Array.isArray(v) ? v.join(" ") : style(v)
+				html += ` ${k}="${escapeHTML(value)}"`
 				break
 		}
 	}
@@ -393,11 +723,11 @@ export function csslib(opt = {}) {
 	for (const s of spaces) {
 		base[`.g${s}`] = { "gap": `${s}px` }
 		base[`.p${s}`] = { "padding": `${s}px` }
-		base[`.px${s}`] = { "padding-x": `${s}px` }
-		base[`.py${s}`] = { "padding-y": `${s}px` }
+		base[`.px${s}`] = { "padding-left": `${s}px`, "padding-right": `${s}px` }
+		base[`.py${s}`] = { "padding-top": `${s}px`, "padding-bottom": `${s}px` }
 		base[`.m${s}`] = { "margin": `${s}px` }
-		base[`.mx${s}`] = { "margin-x": `${s}px` }
-		base[`.my${s}`] = { "margin-y": `${s}px` }
+		base[`.mx${s}`] = { "margin-left": `${s}px`, "margin-right": `${s}px` }
+		base[`.my${s}`] = { "margin-top": `${s}px`, "margin-bottom": `${s}px` }
 		base[`.f${s}`] = { "font-size": `${s}px` }
 		base[`.r${s}`] = { "border-radius": `${s}px` }
 	}
@@ -421,4 +751,76 @@ export function csslib(opt = {}) {
 
 	return css
 
+}
+
+function exec(cmd, opts) {
+	return Bun.spawnSync(Array.isArray(cmd) ? cmd : cmd.split(" "), {
+		stdin: "inherit",
+		stdout: "inherit",
+		stderr: "inherit",
+		...opts
+	})
+}
+
+const cmds = {
+	dev: () => {
+		exec("bun --watch main.js", {
+			env: { ...process.env, "DEV": 1 },
+		})
+	},
+	deploy: (host, dir, service) => {
+		host = host ?? Bun.env["DEPLOY_HOST"]
+		dir = dir ?? Bun.env["DEPLOY_DIR"]
+		service = service ?? Bun.env["DEPLOY_SERVICE"]
+		if (!host || !dir) {
+			console.error("Host and directory required for deployment!")
+			console.log("")
+			console.log(`
+USAGE
+
+    # Copy project to server and optionally restart systemd service
+    $ deploy <host> <dir> <service>
+
+    # Use $DEPLOY_HOST, $DEPLOY_DIR and $DEPLOY_SERVICE from env
+    $ deploy
+			`.trim())
+			return
+		}
+		console.log(`copying project folder to ${host}:${dir}`)
+		exec([
+			"rsync",
+			"-av", "--delete",
+			"--exclude", ".DS_Store",
+			"--exclude", ".git",
+			"--exclude", "data",
+			".", `${host}:${dir}`,
+		])
+		if (service) {
+			console.log(`restarting service ${service}`)
+			exec(`ssh -t ${host} sudo systemctl restart ${service}`)
+		}
+	},
+}
+
+const cmd = process.argv[2]
+
+if (cmd) {
+	if (cmds[cmd]) {
+		cmds[cmd](...process.argv.slice(3))
+	} else {
+		console.error(`Command not found: ${cmd}`)
+		console.log("")
+		console.log(`
+USAGE
+
+    # Start dev server
+    $ bun www.js dev
+
+    # Copy project to server and optionally restart systemd service
+    $ bun www.js deploy <host> <dir> <service>
+
+    # Deploy using $DEPLOY_HOST, $DEPLOY_DIR and $DEPLOY_SERVICE from env
+    $ bun www.js deploy
+		`.trim())
+	}
 }
