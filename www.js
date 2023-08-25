@@ -74,6 +74,73 @@ export function createServer() {
 				return res.file(path)
 			})
 		},
+		dir: (route = "", root = "") => {
+			handle((req) => {
+				const url = new URL(req.url)
+				route = trimSlashes(route)
+				root = trimSlashes(root)
+				const pathname = trimSlashes(url.pathname)
+				const dir = "./" + root
+				if (!pathname.startsWith(route)) return
+				const p = path.join(dir, url.pathname.replace(new RegExp(`^/${route}/?`), ""))
+				if (isFile(p)) {
+					return res.file(p)
+				} else if (isDir(p)) {
+					const entries = fs.readdirSync(p)
+						.filter((entry) => !entry.startsWith("."))
+						.sort((a, b) => a > b ? -1 : 1)
+						.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
+					const files = []
+					const dirs = []
+					for (const entry of entries) {
+						const pp = path.join(p, entry)
+						if (isDir(pp)) {
+							dirs.push(entry)
+						} else if (isFile(pp)) {
+							files.push(entry)
+						}
+					}
+					return res.html("<!DOCTYPE html>" + h("html", { lang: "en" }, [
+						h("head", {}, [
+							h("title", {}, p),
+							h("style", {}, css({
+								"*": {
+									"margin": "0",
+									"padding": "0",
+									"box-sizing": "border-box",
+								},
+								"body": {
+									"padding": "16px",
+									"font-size": "16px",
+									"font-family": "Monospace",
+								},
+								"li": {
+									"list-style": "none",
+								},
+								"a": {
+									"color": "blue",
+									"text-decoration": "none",
+									":hover": {
+										"background": "blue",
+										"color": "white",
+									},
+								},
+							})),
+						]),
+						h("body", {}, [
+							h("ul", {}, [
+								...dirs.map((dir) => h("li", {}, [
+									h("a", { href: `/${pathname}/${dir}`, }, dir + "/"),
+								])),
+								...files.map((file) => h("li", {}, [
+									h("a", { href: `/${pathname}/${file}`, }, file),
+								])),
+							]),
+						]),
+					]))
+				}
+			})
+		},
 		match: (pat, cb) => handle((req) => handleMatch(req, pat, handler)),
 		get: genMethodHandler("GET"),
 		post: genMethodHandler("POST"),
@@ -429,6 +496,13 @@ export const res = {
 			...(opts.headers ?? {}),
 		},
 	}),
+	json: (content, opts = {}) => new Response(content, {
+		status: opts.status ?? 200,
+		headers: {
+			"Content-Type": "application/json",
+			...(opts.headers ?? {}),
+		},
+	}),
 	redirect: (link, opts = {}) => new Response(null, {
 		status: opts.status ?? 303,
 		headers: {
@@ -447,60 +521,6 @@ export const res = {
 				...(opts.headers ?? {}),
 			},
 		})
-	},
-	dir: (path, opts = {}) => {
-		if (!isDir(path)) return
-		const entries = fs.readdirSync(path)
-			.filter((entry) => !entry.startsWith("."))
-			.sort((a, b) => a > b ? -1 : 1)
-			.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
-		const files = []
-		const dirs = []
-		for (const entry of entries) {
-			if (isDir(entry)) {
-				dirs.push(entry)
-			} else {
-				files.push(entry)
-			}
-		}
-		return res.html("<!DOCTYPE html>" + h("html", { lang: "en" }, [
-			h("head", {}, [
-				h("title", {}, path),
-				h("style", {}, css({
-					"*": {
-						"margin": "0",
-						"padding": "0",
-						"box-sizing": "border-box",
-					},
-					"body": {
-						"padding": "16px",
-						"font-size": "16px",
-						"font-family": "Monospace",
-					},
-					"li": {
-						"list-style": "none",
-					},
-					"a": {
-						"color": "blue",
-						"text-decoration": "none",
-						":hover": {
-							"background": "blue",
-							"color": "white",
-						},
-					},
-				})),
-			]),
-			h("body", {}, [
-				h("ul", {}, [
-					...dirs.map((dir) => h("li", {}, [
-						h("a", { href: dir, }, dir + "/"),
-					])),
-					...files.map((file) => h("li", {}, [
-						h("a", { href: file, }, file),
-					])),
-				]),
-			]),
-		]), opts)
 	},
 }
 

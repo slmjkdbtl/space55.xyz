@@ -1,0 +1,35 @@
+ABOUT
+
+  Xiyuan Wu (tga)
+  https://space55.xyz/
+  tga@space55.xyz
+
+  Software, Games, Interactive Experiences.
+
+SKILLS
+
+  - C
+  - Rust
+  - JavaScript
+  - Lua
+  - UI/UX Design
+
+EXPERIENCES
+
+  Replit (2020 - current) Designer & Developer
+    - main developer of Kaboom, a JavaScript game programming library
+    - front-end development (and sometimes design) for the Replit web app
+
+  Gamecores (2019) Designer & Developer
+    - designed and developed 3 built-in games & apps for DEOT (a linux based
+      handheld gaming console)
+
+EDUCATION
+
+  Parsone School of Design (2016 - 2020, BFA)
+
+PROJECTS
+
+  dirty
+    http://space55.xyz/dirty
+    single-header cross-platform game engine
