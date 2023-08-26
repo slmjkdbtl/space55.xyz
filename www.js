@@ -60,29 +60,44 @@ export function createServer() {
 	}
 
 	return {
+		start: (port, hostname) => {
+			return Bun.serve({
+				port: port,
+				hostname: hostname,
+				fetch: fetch,
+			})
+		},
+		fetch: fetch,
 		handle: handle,
 		error: (action) => handleError = action,
 		notFound: (action) => handleNotFound = action,
+		match: (pat, cb) => handle((req) => handleMatch(req, pat, handler)),
+		get: genMethodHandler("GET"),
+		post: genMethodHandler("POST"),
+		put: genMethodHandler("PUT"),
+		delete: genMethodHandler("DELETE"),
+		patch: genMethodHandler("PATCH"),
 		files: (route = "", root = "") => {
 			handle((req) => {
 				const url = new URL(req.url)
 				route = trimSlashes(route)
-				root = trimSlashes(root)
-				const dir = "./" + root + (root ? "/" : "")
-				if (!url.pathname.startsWith("/" + route)) return
-				const path = dir + url.pathname.replace(new RegExp(`^/${route}/?`), "")
-				return res.file(path)
+				const pathname = trimSlashes(url.pathname)
+				if (!pathname.startsWith(route)) return
+				const baseDir = "./" + trimSlashes(root)
+				const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
+				const p = path.join(baseDir, relativeURLPath)
+				return res.file(p)
 			})
 		},
 		dir: (route = "", root = "") => {
 			handle((req) => {
 				const url = new URL(req.url)
 				route = trimSlashes(route)
-				root = trimSlashes(root)
 				const pathname = trimSlashes(url.pathname)
-				const dir = "./" + root
 				if (!pathname.startsWith(route)) return
-				const p = path.join(dir, url.pathname.replace(new RegExp(`^/${route}/?`), ""))
+				const baseDir = "./" + trimSlashes(root)
+				const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
+				const p = path.join(baseDir, relativeURLPath)
 				if (isFile(p)) {
 					return res.file(p)
 				} else if (isDir(p)) {
@@ -100,9 +115,10 @@ export function createServer() {
 							files.push(entry)
 						}
 					}
+					const isRoot = relativeURLPath === ""
 					return res.html("<!DOCTYPE html>" + h("html", { lang: "en" }, [
 						h("head", {}, [
-							h("title", {}, p),
+							h("title", {}, url.pathname),
 							h("style", {}, css({
 								"*": {
 									"margin": "0",
@@ -129,6 +145,9 @@ export function createServer() {
 						]),
 						h("body", {}, [
 							h("ul", {}, [
+								...(isRoot ? [] : [
+									h("a", { href: `/${parentPath(pathname)}`, }, ".."),
+								]),
 								...dirs.map((dir) => h("li", {}, [
 									h("a", { href: `/${pathname}/${dir}`, }, dir + "/"),
 								])),
@@ -141,20 +160,6 @@ export function createServer() {
 				}
 			})
 		},
-		match: (pat, cb) => handle((req) => handleMatch(req, pat, handler)),
-		get: genMethodHandler("GET"),
-		post: genMethodHandler("POST"),
-		put: genMethodHandler("PUT"),
-		delete: genMethodHandler("DELETE"),
-		patch: genMethodHandler("PATCH"),
-		start: (port, hostname) => {
-			return Bun.serve({
-				port: port,
-				hostname: hostname,
-				fetch: fetch,
-			})
-		},
-		fetch: fetch,
 	}
 }
 
@@ -464,6 +469,7 @@ export function matchUrl(pat, url) {
 }
 
 const trimSlashes = (str) => str.replace(/\/*$/, "").replace(/^\/*/, "")
+const parentPath = (p, sep = "/") => p.split(sep).slice(0, -1).join(sep)
 
 const isFile = (path) => {
 	try {

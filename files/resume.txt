@@ -8,10 +8,10 @@ ABOUT
 
 SKILLS
 
-  - C
-  - Rust
   - JavaScript
   - Lua
+  - C
+  - Rust
   - UI/UX Design
 
 EXPERIENCES
