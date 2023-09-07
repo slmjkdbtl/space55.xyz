@@ -31,5 +31,5 @@ EDUCATION
 PROJECTS
 
   dirty
-    http://space55.xyz/dirty
+    https://github.com/slmjkdbtl/dirty
     single-header cross-platform game engine
