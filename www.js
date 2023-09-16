@@ -71,7 +71,7 @@ export function createServer() {
 		handle: handle,
 		error: (action) => handleError = action,
 		notFound: (action) => handleNotFound = action,
-		match: (pat, cb) => handle((req) => handleMatch(req, pat, handler)),
+		match: (pat, handler) => handle((req) => handleMatch(req, pat, handler)),
 		get: genMethodHandler("GET"),
 		post: genMethodHandler("POST"),
 		put: genMethodHandler("PUT"),
@@ -544,7 +544,7 @@ export function getCookies(req) {
 export function kvList(props) {
 	return Object.entries(props)
 		.filter(([k, v]) => v)
-		.map(([k, v]) => k === true ? k : `${k}=${v}`)
+		.map(([k, v]) => v === true ? k : `${k}=${v}`)
 		.join("; ")
 }
 
