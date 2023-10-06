@@ -4,20 +4,17 @@ ABOUT
   https://space55.xyz/
   tga@space55.xyz
 
-  Software, Games, Interactive Experiences.
-
 SKILLS
 
-  - JavaScript
-  - Lua
-  - C
-  - Rust
+  - Software Development (front-end, some back-end)
+  - Game Dev
   - UI/UX Design
+  - Graphic Design
 
 EXPERIENCES
 
   Replit (2020 - current) Designer & Developer
-    - main developer of Kaboom, a JavaScript game programming library
+    - main developer of Kaboom, a JavaScript game programming framework
     - front-end development (and sometimes design) for the Replit web app
 
   Gamecores (2019) Designer & Developer
@@ -26,9 +23,13 @@ EXPERIENCES
 
 EDUCATION
 
-  Parsone School of Design (2016 - 2020, BFA)
+  Parsons School of Design (2016 - 2020, Bachelor of Fine Arts)
 
 PROJECTS
+
+  Kaboom
+    https://github.com/replit/kaboom
+    JavaScript game framework
 
   dirty
     https://github.com/slmjkdbtl/dirty
