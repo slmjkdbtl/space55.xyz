@@ -306,6 +306,7 @@ const styles = {
 	},
 
 }
+
 export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("head", {}, [
 		h("title", {}, "tga"),
