@@ -330,7 +330,6 @@ http://www.pd.org/~zeug/konx-ghost.html
 https://www.tzadik.com/list_frame.php?searchfield=series&searchterm=japan
 https://www.williamkage.com/
 https://chronoforest.ytmnd.com/
-https://psxdatacenter.com/
 https://puzzles.nigelcoldwell.co.uk/
 http://altexxanet.org/
 https://timonoko.github.io/
@@ -396,3 +395,5 @@ http://viznut.fi/cwu/
 https://www.tzadik.com/
 https://tmpout.sh/
 https://www.openbsd.org/
+https://vgmdb.net/
+https://compu-lsd.com/
