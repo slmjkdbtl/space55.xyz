@@ -3,7 +3,14 @@
 
 import * as fs from "fs"
 import * as path from "path"
-import type { ServeOptions } from "bun"
+import type {
+	ServeOptions,
+	WebSocketServeOptions,
+	SocketAddress,
+	ServerWebSocket,
+	ServerWebSocketSendStatus,
+	WebSocketHandler,
+} from "bun"
 import * as sqlite from "bun:sqlite"
 
 export const isDev = Boolean(Bun.env["DEV"])
@@ -16,7 +23,9 @@ export type Req = {
 	text: () => Promise<string>,
 	arrayBuffer: () => Promise<ArrayBuffer>,
 	json<T = any>(): Promise<T>,
+	formData: () => Promise<FormData>,
 	blob: () => Promise<Blob>,
+	ip: SocketAddress | null,
 }
 
 export type Res = {
@@ -48,6 +57,7 @@ export type Ctx = {
 	req: Req,
 	res: Res,
 	next: () => void,
+	upgrade: (opts?: ServerUpgradeOpts) => boolean,
 }
 
 export type Handler = (ctx: Ctx) => void
@@ -73,26 +83,122 @@ export type Server = {
 	use: (handler: Handler) => void,
 	error: (handler: ErrorHandler) => void,
 	notFound: (action: NotFoundHandler) => void,
-	match: (pat: string, handler: Handler) => void,
-	get: (pat: string, handler: Handler) => void,
-	post: (pat: string, handler: Handler) => void,
-	put: (pat: string, handler: Handler) => void,
-	delete: (pat: string, handler: Handler) => void,
-	patch: (pat: string, handler: Handler) => void,
-	files: (route: string, root: string) => void,
-	dir: (route: string, root: string) => void,
+    stop: (closeActiveConnections?: boolean) => void,
+	hostname: string,
+	port: number,
+	ws: {
+		clients: Map<string, WebSocket>,
+		onMessage: (action: (ws: WebSocket, msg: string | Buffer) => void) => EventController,
+		onOpen: (action: (ws: WebSocket) => void) => EventController,
+		onClose: (action: (ws: WebSocket) => void) => EventController,
+		broadcast: (data: string | BufferSource, compress?: boolean) => void,
+		publish: (
+			topic: string,
+			data: string | TypedArray | DataView | ArrayBuffer | SharedArrayBuffer,
+			compress?: boolean,
+		) => ServerWebSocketSendStatus,
+	},
 }
 
-export type ServerOpts = Omit<ServeOptions, "fetch">
+type HeadersInit =
+  | Headers
+  | Record<string, string>
+  | Array<[string, string]>
+  | IterableIterator<[string, string]>;
+
+export type ServerOpts = Omit<ServeOptions, "fetch"> | Omit<WebSocketServeOptions, "fetch">
+export type ServerUpgradeOpts<T = undefined> = {
+	headers?: HeadersInit,
+	data?: T,
+}
+
+export type EventController = {
+	paused: boolean,
+	cancel: () => void
+}
+
+export function createEvent<Args extends any[] = any[]>() {
+
+	const actions = new Registry<(...args: Args) => void>()
+
+	function add(action: (...args: Args) => void): EventController {
+		let paused = false
+		const cancel = actions.pushd((...args: Args) => {
+			if (paused) return
+			action(...args)
+		})
+		return {
+			get paused() {
+				return paused
+			},
+			set paused(p: boolean) {
+				paused = p
+			},
+			cancel: cancel,
+		}
+	}
+	function addOnce(action: (...args: Args) => void): EventController {
+		const ev = add((...args) => {
+			ev.cancel()
+			action(...args)
+		})
+		return ev
+	}
+
+	const next = () => new Promise((res) => addOnce((...args) => res(args)))
+	const trigger = (...args: Args) => actions.forEach((action) => action(...args))
+	const numListeners = () => actions.size
+	const clear = () => actions.clear()
+
+	return {
+		add,
+		addOnce,
+		next,
+		trigger,
+		numListeners,
+		clear,
+	}
+}
+
+export type WebSocketData = {
+	id: string,
+}
+
+// TODO: support arbituary data
+export type WebSocket = ServerWebSocket<WebSocketData>
+
+const isPromise = (input: any): input is Promise<any> => {
+	return input
+		&& typeof input.then === "function"
+		&& typeof input.catch === "function"
+}
 
 export function createServer(opts: ServerOpts = {}): Server {
 
-	const server = Bun.serve({
-		...opts,
-		fetch: fetch,
-	})
+	const wsClients = new Map<string, WebSocket>()
+	const wsEvents = {
+		message: createEvent<[WebSocket, string | Buffer]>(),
+		open: createEvent<[WebSocket]>(),
+		close: createEvent<[WebSocket]>(),
+	}
+	const websocket: WebSocketHandler<WebSocketData> = {
+		message: (ws, msg) => {
+			wsEvents.message.trigger(ws, msg)
+		},
+		open: (ws) => {
+			const id = crypto.randomUUID()
+			wsClients.set(id, ws)
+			ws.data = {
+				id: id,
+			}
+			wsEvents.open.trigger(ws)
+		},
+		close: (ws) => {
+			wsClients.delete(ws.data.id)
+			wsEvents.close.trigger(ws)
+		},
+	}
 
-	// TODO: error handling
 	async function fetch(bunReq: Request): Promise<Response> {
 		return new Promise((resolve) => {
 			let done = false
@@ -100,16 +206,19 @@ export function createServer(opts: ServerOpts = {}): Server {
 				method: bunReq.method,
 				url: new URL(bunReq.url),
 				headers: bunReq.headers,
+				ip: bunServer.requestIP(bunReq),
 				params: {},
-				text: bunReq.text,
-				json: bunReq.json,
-				arrayBuffer: bunReq.arrayBuffer,
-				blob: bunReq.blob,
+				text: bunReq.text.bind(bunReq),
+				json: bunReq.json.bind(bunReq),
+				arrayBuffer: bunReq.arrayBuffer.bind(bunReq),
+				formData: bunReq.formData.bind(bunReq),
+				blob: bunReq.blob.bind(bunReq),
 			}
 			const res: Res = {
 				headers: new Headers(),
 				status: 200,
 				send(data, opt) {
+					if (done) return
 					resolve(new Response(data, {
 						headers: this.headers,
 						status: this.status,
@@ -137,7 +246,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 					this.send(file, opt)
 				},
 				redirect(location: string, opt) {
-					this.status = 303
+					this.status = 302
 					this.headers.append("Location", location)
 					this.send(null, opt)
 				},
@@ -146,147 +255,216 @@ export function createServer(opts: ServerOpts = {}): Server {
 			function next() {
 				if (done) return
 				const h = curHandlers.shift()
-				const ctx = { req, res, next }
+				const ctx: Ctx = {
+					req,
+					res,
+					next,
+					upgrade: (opts) => {
+						const success = bunServer.upgrade(bunReq, opts)
+						// @ts-ignore
+						if (success) resolve(undefined)
+						return success
+					},
+				}
 				if (h) {
-					try {
+					if (errHandler) {
+						try {
+							const res = h(ctx)
+							if (isPromise(res)) {
+								res.catch((e) => {
+									if (errHandler) {
+										errHandler(ctx, e)
+									}
+								})
+							}
+						} catch (e) {
+							errHandler(ctx, e as Error)
+						}
+					} else {
 						h(ctx)
-					} catch (e) {
-						errHandler(ctx, e as Error)
 					}
 				} else {
-					notFoundHandler(ctx)
+					if (notFoundHandler) {
+						notFoundHandler(ctx)
+					}
 				}
 			}
 			next()
 		})
 	}
 
+	const bunServer = Bun.serve({
+		...opts,
+		websocket,
+		fetch,
+	})
+
 	const handlers: Registry<Handler> = new Registry()
-	const handle = (handler: Handler) => handlers.push(handler)
-
-	let errHandler: ErrorHandler = ({ req }, err) => {
-		if (isDev) {
-			throw err
-		} else {
-			console.error(`Time: ${new Date()}`)
-			console.error(`Request: ${req.method} ${req.url.pathname}`)
-			console.error("")
-			console.error(err)
-			return new Response("Internal server error", { status: 500 })
-		}
-	}
-
-	let notFoundHandler: NotFoundHandler = (req) => new Response("404", { status: 404 })
-
-	function handleMatch(ctx: Ctx, pat: string, handler: Handler) {
-		const url = new URL(ctx.req.url)
-		const match = matchPath(pat, decodeURI(url.pathname))
-		if (match) {
-			ctx.req.params = match
-			return handler(ctx)
-		}
-	}
-
-	function genMethodHandler(method: string) {
-		return (pat: string, handler: Handler) => {
-			handlers.push((ctx) => {
-				if (ctx.req.method !== method) return
-				return handleMatch(ctx, pat, handler)
-			})
-		}
-	}
+	const use = (handler: Handler) => handlers.push(handler)
+	let errHandler: ErrorHandler | null = null
+	let notFoundHandler: NotFoundHandler | null = null
 
 	return {
-		use: handle,
+		use: use,
 		error: (action: ErrorHandler) => errHandler = action,
 		notFound: (action: NotFoundHandler) => notFoundHandler = action,
-		match: (pat: string, handler: Handler) => handle((ctx) => handleMatch(ctx, pat, handler)),
-		get: genMethodHandler("GET"),
-		post: genMethodHandler("POST"),
-		put: genMethodHandler("PUT"),
-		delete: genMethodHandler("DELETE"),
-		patch: genMethodHandler("PATCH"),
-		files: (route = "", root = "") => {
-			return handle(({ req, res, next }) => {
-				route = trimSlashes(route)
-				const pathname = trimSlashes(decodeURI(req.url.pathname))
-				if (!pathname.startsWith(route)) return next()
-				const baseDir = "./" + trimSlashes(root)
-				const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
-				const p = path.join(baseDir, relativeURLPath)
-				return res.sendFile(p)
-			})
+		stop: bunServer.stop.bind(bunServer),
+		hostname: bunServer.hostname,
+		port: bunServer.port,
+		ws: {
+			clients: wsClients,
+			onMessage: (action) => wsEvents.message.add(action),
+			onOpen: (action) => wsEvents.open.add(action),
+			onClose: (action) => wsEvents.close.add(action),
+			publish: bunServer.publish.bind(bunServer),
+			// TODO: option to exclude self
+			broadcast: (data: string | BufferSource, compress?: boolean) => {
+				wsClients.forEach((client) => {
+					client.send(data, compress)
+				})
+			},
 		},
-		dir: (route = "", root = "") => {
-			handle(({ req, res, next }) => {
-				route = trimSlashes(route)
-				const pathname = trimSlashes(decodeURI(req.url.pathname))
-				if (!pathname.startsWith(route)) return next()
-				const baseDir = "./" + trimSlashes(root)
-				const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
-				const p = path.join(baseDir, relativeURLPath)
-				if (isFile(p)) {
-					return res.sendFile(p)
-				} else if (isDir(p)) {
-					const entries = fs.readdirSync(p)
-						.filter((entry) => !entry.startsWith("."))
-						.sort((a, b) => a > b ? -1 : 1)
-						.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
-					const files = []
-					const dirs = []
-					for (const entry of entries) {
-						const pp = path.join(p, entry)
-						if (isDir(pp)) {
-							dirs.push(entry)
-						} else if (isFile(pp)) {
-							files.push(entry)
-						}
-					}
-					const isRoot = relativeURLPath === ""
-					return res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
-						h("head", {}, [
-							h("title", {}, decodeURI(req.url.pathname)),
-							h("style", {}, css({
-								"*": {
-									"margin": "0",
-									"padding": "0",
-									"box-sizing": "border-box",
-								},
-								"body": {
-									"padding": "16px",
-									"font-size": "16px",
-									"font-family": "Monospace",
-								},
-								"li": {
-									"list-style": "none",
-								},
-								"a": {
-									"color": "blue",
-									"text-decoration": "none",
-									":hover": {
-										"background": "blue",
-										"color": "white",
-									},
-								},
-							})),
-						]),
-						h("body", {}, [
-							h("ul", {}, [
-								...(isRoot ? [] : [
-									h("a", { href: `/${parentPath(pathname)}`, }, ".."),
-								]),
-								...dirs.map((dir) => h("li", {}, [
-									h("a", { href: `/${pathname}/${dir}`, }, dir + "/"),
-								])),
-								...files.map((file) => h("li", {}, [
-									h("a", { href: `/${pathname}/${file}`, }, file),
-								])),
-							]),
-						]),
-					]))
+	}
+}
+
+type Func = (...args: any[]) => any
+
+export function overload2<A extends Func, B extends Func>(fn1: A, fn2: B): A & B {
+	return ((...args) => {
+		const al = args.length
+		if (al === fn1.length) return fn1(...args)
+		if (al === fn2.length) return fn2(...args)
+	}) as A & B
+}
+
+export function overload3<
+	A extends Func,
+	B extends Func,
+	C extends Func,
+>(fn1: A, fn2: B, fn3: C): A & B & C {
+	return ((...args) => {
+		const al = args.length
+		if (al === fn1.length) return fn1(...args)
+		if (al === fn2.length) return fn2(...args)
+		if (al === fn3.length) return fn3(...args)
+	}) as A & B & C
+}
+
+export function overload4<
+	A extends Func,
+	B extends Func,
+	C extends Func,
+	D extends Func,
+>(fn1: A, fn2: B, fn3: C, fn4: D): A & B & C & D {
+	return ((...args) => {
+		const al = args.length
+		if (al === fn1.length) return fn1(...args)
+		if (al === fn2.length) return fn2(...args)
+		if (al === fn3.length) return fn3(...args)
+		if (al === fn4.length) return fn4(...args)
+	}) as A & B & C & D
+}
+
+export const route = overload2((pat: string, handler: Handler): Handler => {
+	return (ctx) => {
+		const match = matchPath(pat, decodeURI(ctx.req.url.pathname))
+		if (match) {
+			ctx.req.params = match
+			handler(ctx)
+		} else {
+			ctx.next()
+		}
+	}
+}, (method: string, pat: string, handler: Handler): Handler => {
+	return (ctx) => {
+		if (ctx.req.method.toLowerCase() === method.toLowerCase()) {
+			route(pat, handler)(ctx)
+		} else {
+			ctx.next()
+		}
+	}
+})
+
+export function files(route = "", root = ""): Handler {
+	return ({ req, res, next }) => {
+		route = trimSlashes(route)
+		const pathname = trimSlashes(decodeURI(req.url.pathname))
+		if (!pathname.startsWith(route)) return next()
+		const baseDir = "./" + trimSlashes(root)
+		const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
+		const p = path.join(baseDir, relativeURLPath)
+		return res.sendFile(p)
+	}
+}
+
+export function dir(route = "", root = ""): Handler {
+	return ({ req, res, next }) => {
+		route = trimSlashes(route)
+		const pathname = trimSlashes(decodeURI(req.url.pathname))
+		if (!pathname.startsWith(route)) return next()
+		const baseDir = "./" + trimSlashes(root)
+		const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
+		const p = path.join(baseDir, relativeURLPath)
+		if (isFile(p)) {
+			return res.sendFile(p)
+		} else if (isDir(p)) {
+			const entries = fs.readdirSync(p)
+				.filter((entry) => !entry.startsWith("."))
+				.sort((a, b) => a > b ? -1 : 1)
+				.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
+			const files = []
+			const dirs = []
+			for (const entry of entries) {
+				const pp = path.join(p, entry)
+				if (isDir(pp)) {
+					dirs.push(entry)
+				} else if (isFile(pp)) {
+					files.push(entry)
 				}
-			})
-		},
+			}
+			const isRoot = relativeURLPath === ""
+			return res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
+				h("head", {}, [
+					h("title", {}, decodeURI(req.url.pathname)),
+					h("style", {}, css({
+						"*": {
+							"margin": "0",
+							"padding": "0",
+							"box-sizing": "border-box",
+						},
+						"body": {
+							"padding": "16px",
+							"font-size": "16px",
+							"font-family": "Monospace",
+						},
+						"li": {
+							"list-style": "none",
+						},
+						"a": {
+							"color": "blue",
+							"text-decoration": "none",
+							":hover": {
+								"background": "blue",
+								"color": "white",
+							},
+						},
+					})),
+				]),
+				h("body", {}, [
+					h("ul", {}, [
+						...(isRoot ? [] : [
+							h("a", { href: `/${parentPath(pathname)}`, }, ".."),
+						]),
+						...dirs.map((dir) => h("li", {}, [
+							h("a", { href: `/${pathname}/${dir}`, }, dir + "/"),
+						])),
+						...files.map((file) => h("li", {}, [
+							h("a", { href: `/${pathname}/${file}`, }, file),
+						])),
+					]),
+				]),
+			]))
+		}
 	}
 }
 
