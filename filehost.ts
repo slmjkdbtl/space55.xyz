@@ -1,36 +1,53 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import {
-	cron,
 	Handler,
+	cron,
 } from "./www"
 
+export type FileHostOpts = {
+	dir: string,
+	lifespan: number,
+}
 
-const DIR = "static/tmp"
-const HOURS = 1 * 24
+export default function createFileHost(opts: FileHostOpts) {
 
-async function check() {
-	const files = await fs.readdir(DIR)
-	const now = Date.now()
-	for (const file of files) {
-		const p = path.join(DIR, file)
-		const stat = await fs.stat(p)
-		const age = now - stat.birthtime.getTime()
-		const hours = age / 1000 / 60 / 60
-		if (hours >= HOURS) {
+	const handler: Handler = async ({ req, res, next }) => {
+		const data = await req.formData()
+		const file = data.get("file") as File
+		Bun.write(path.join(opts.dir, file.name), file)
+		const url = `${req.url.origin}/${opts.dir}/${file.name}`
+		res.sendText(url + "\n")
+	}
+
+	const check = async () => {
+		const files = await fs.readdir(opts.dir)
+		const now = Date.now()
+		for (const file of files) {
+			const p = path.join(opts.dir, file)
+			const stat = await fs.stat(p)
+			const age = now - stat.birthtime.getTime()
+			const hours = age / 1000 / 60 / 60
+			if (hours >= opts.lifespan) {
+				await fs.unlink(p)
+			}
+		}
+	}
+
+	const clear = async () => {
+		const files = await fs.readdir(opts.dir)
+		for (const file of files) {
+			const p = path.join(opts.dir, file)
 			await fs.unlink(p)
 		}
 	}
+
+	cron("minutely", check)
+
+	return {
+		handler,
+		check,
+		clear,
+	}
+
 }
-
-cron(0, "*", "*", "*", "*", check)
-
-const handler: Handler = async ({ req, res, next }) => {
-	const data = await req.formData()
-	const file = data.get("file") as File
-	Bun.write(path.join(DIR, file.name), file)
-	const url = `${req.url.origin}/${DIR}/${file.name}`
-	res.sendText(url + "\n")
-}
-
-export default handler

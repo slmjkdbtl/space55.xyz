@@ -190,7 +190,6 @@ https://en.wikipedia.org/wiki/Basidiomycota
 https://en.wikipedia.org/wiki/Ghoti
 https://legendsworld.net/adventure/news
 https://en.wikipedia.org/wiki/Taikyoku_shogi
-https://github.com/mame/quine-relay
 https://www.dangermouse.net/esoteric/piet.html
 https://www.dangermouse.net/esoteric/chef.html
 https://esolangs.org/
@@ -232,7 +231,7 @@ https://wearethemutants.com/2017/07/25/barlowes-guide-to-extraterrestrials-1979/
 https://www.filfre.net/
 http://www.noxioushamster.com/
 https://www.molemanfilm.com/
-https://caravelgames.com/Articles/Games.html
+https://caravelgames.com/
 https://justine.lol/
 http://landoflisp.com/
 https://10kb.neocities.org/
@@ -398,3 +397,16 @@ https://www.openbsd.org/
 https://vgmdb.net/
 https://compu-lsd.com/
 https://adamcadre.ac/if/905.html
+https://nervetower.neocities.org/main
+https://www.planetemu.net/
+https://mednafen.github.io/
+https://no-intro.org/
+https://mother3.fobby.net/
+https://hiddenpalace.org/
+https://www.romhacking.net/
+https://davidmenestres.com/2013/07/sun-ra-charts/
+https://satoarchives.com/
+http://seaman.ai/
+https://www.offnote.org/
+https://www.cjas.org/~leng/lain.htm
+https://androidarts.com/

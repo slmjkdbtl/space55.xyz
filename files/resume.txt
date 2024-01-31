@@ -6,7 +6,7 @@ ABOUT
 
 SKILLS
 
-  - Software Development (front-end, some back-end)
+  - Software Development (mostly front-end)
   - Game Dev
   - UI/UX Design
   - Graphic Design
@@ -28,7 +28,7 @@ EDUCATION
 PROJECTS
 
   Kaboom
-    https://github.com/replit/kaboom
+    https://kaboomjs.com
     JavaScript game framework
 
   dirty
