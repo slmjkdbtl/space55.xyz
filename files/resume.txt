@@ -6,10 +6,14 @@ ABOUT
 
 SKILLS
 
-  - Software Development (mostly front-end)
-  - Game Dev
-  - UI/UX Design
-  - Graphic Design
+  Software Development
+    - 8 years of experience, 4 years professional
+    - mostly front end, only did full stack for personal projects
+    - fluent in JavaScript / TypeScript, can write C, Lua, Rust etc.
+    - https://github.com/slmjkdbtl
+
+  Game Dev
+  UI/UX Design
 
 EXPERIENCES
 
@@ -19,7 +23,7 @@ EXPERIENCES
 
   Gamecores (2019) Designer & Developer
     - designed and developed 3 built-in games & apps for DEOT (a linux based
-      handheld gaming console)
+      handheld gaming console) in Lua & Love2d
 
 EDUCATION
 
@@ -29,8 +33,9 @@ PROJECTS
 
   Kaboom
     https://kaboomjs.com
-    JavaScript game framework
+    JavaScript 2D game framework
 
   dirty
     https://github.com/slmjkdbtl/dirty
-    single-header cross-platform game engine
+    personal single-header C libraries, including software renderer, scripting
+    language etc

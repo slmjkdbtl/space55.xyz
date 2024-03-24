@@ -1,9 +1,7 @@
 {
-	"name": "space55.xyz",
-	"module": "main.ts",
 	"type": "module",
 	"devDependencies": {
-		"@types/bun": "^1.0.4",
+		"@types/bun": "^1.0.5",
 		"typescript": "^5.3.3"
 	}
 }

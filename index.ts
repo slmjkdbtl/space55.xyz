@@ -332,6 +332,6 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 		h("div", { class: "sites wrapper", }, sites.map((site) => h("a", { class: "box obj", href: site.link }, [
 			h("img", { class: "img obj", src: `/static/img/sites/${site.name}.png`, alt: site.name, })
 		]))),
-		h("script", { src: "/static/scripts/main.js" }, ""),
+		h("script", { src: "/static/scripts/index.js" }, ""),
 	]),
 ])

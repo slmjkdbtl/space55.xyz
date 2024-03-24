@@ -1,5 +1,4 @@
-// helpers for the world wide web with Bun
-// TODO: rate limiter
+// helper functions for the world wide web with Bun
 
 import * as fs from "fs"
 import * as path from "path"
@@ -25,27 +24,21 @@ export type Req = {
 	json<T = any>(): Promise<T>,
 	formData: () => Promise<FormData>,
 	blob: () => Promise<Blob>,
-	ip: string | null,
+	getIP: () => string | null,
+	getCookies: () => Record<string, string>,
 }
 
 export type Res = {
 	headers: Headers,
 	status: number,
-	send: (
-		data?:
-			| ReadableStream
-			| BlobPart
-			| BlobPart[]
-			| FormData
-			| URLSearchParams
-			| null,
-		opt?: ResOpt,
-	) => void,
+	body: null | BodyInit,
+	send: (data?: BodyInit | null, opt?: ResOpt) => void,
 	sendText: (content: string, opt?: ResOpt) => void,
 	sendHTML: (content: string, opt?: ResOpt) => void,
 	sendJSON: <T = any>(content: T, opt?: ResOpt) => void,
 	sendFile: (path: string, opt?: ResOpt) => void,
 	redirect: (location: string, opt?: ResOpt) => void,
+	onFinish: (action: () => void) => void,
 }
 
 export type ResOpt = {
@@ -79,34 +72,29 @@ export class Registry<T> extends Map<number, T> {
 }
 
 export type Server = {
-	// TODO: return event controllers?
 	use: (handler: Handler) => void,
 	error: (handler: ErrorHandler) => void,
 	notFound: (action: NotFoundHandler) => void,
     stop: (closeActiveConnections?: boolean) => void,
 	hostname: string,
+	url: URL,
 	port: number,
 	ws: {
 		clients: Map<string, WebSocket>,
 		onMessage: (action: (ws: WebSocket, msg: string | Buffer) => void) => EventController,
 		onOpen: (action: (ws: WebSocket) => void) => EventController,
 		onClose: (action: (ws: WebSocket) => void) => EventController,
-		broadcast: (data: string | BufferSource, compress?: boolean) => void,
+		broadcast: (data: string | Bun.BufferSource, compress?: boolean) => void,
 		publish: (
 			topic: string,
-			data: string | TypedArray | DataView | ArrayBuffer | SharedArrayBuffer,
+			data: string | DataView | ArrayBuffer | SharedArrayBuffer,
 			compress?: boolean,
 		) => ServerWebSocketSendStatus,
 	},
 }
 
-type HeadersInit =
-  | Headers
-  | Record<string, string>
-  | Array<[string, string]>
-  | IterableIterator<[string, string]>;
-
 export type ServerOpts = Omit<ServeOptions, "fetch"> | Omit<WebSocketServeOptions, "fetch">
+
 export type ServerUpgradeOpts<T = undefined> = {
 	headers?: HeadersInit,
 	data?: T,
@@ -201,46 +189,61 @@ export function createServer(opts: ServerOpts = {}): Server {
 
 	async function fetch(bunReq: Request): Promise<Response> {
 		return new Promise((resolve) => {
-			function getIP() {
-				let ip = bunReq.headers.get("X-Forwarded-For")?.split(",")[0].trim()
-					?? bunServer.requestIP(bunReq)?.address
-				if (!ip) return null
-				const ipv6Prefix = "::ffff:"
-				// ipv4 in ipv6
-				if (ip?.startsWith(ipv6Prefix)) {
-					ip = ip.substring(ipv6Prefix.length)
-				}
-				const localhostIPs = new Set([
-					"127.0.0.1",
-					"::1",
-				])
-				if (localhostIPs.has(ip)) return null
-				return ip
-			}
 			let done = false
 			const req: Req = {
 				method: bunReq.method,
 				url: new URL(bunReq.url),
 				headers: bunReq.headers,
-				ip: getIP(),
 				params: {},
 				text: bunReq.text.bind(bunReq),
 				json: bunReq.json.bind(bunReq),
 				arrayBuffer: bunReq.arrayBuffer.bind(bunReq),
 				formData: bunReq.formData.bind(bunReq),
 				blob: bunReq.blob.bind(bunReq),
+				getIP: () => {
+					let ip = bunReq.headers.get("X-Forwarded-For")?.split(",")[0].trim()
+						?? bunServer.requestIP(bunReq)?.address
+					if (!ip) return null
+					const ipv6Prefix = "::ffff:"
+					// ipv4 in ipv6
+					if (ip?.startsWith(ipv6Prefix)) {
+						ip = ip.substring(ipv6Prefix.length)
+					}
+					const localhostIPs = new Set([
+						"127.0.0.1",
+						"::1",
+					])
+					if (localhostIPs.has(ip)) return null
+					return ip
+				},
+				getCookies: () => {
+					const str = bunReq.headers.get("Cookie")
+					if (!str) return {}
+					const cookies: Record<string, string> = {}
+					for (const c of str.split(";")) {
+						const [k, v] = c.split("=")
+						cookies[k.trim()] = v.trim()
+					}
+					return cookies
+				},
 			}
+			const onFinishEvents: Array<() => void> = []
 			const res: Res = {
 				headers: new Headers(),
 				status: 200,
-				send(data, opt) {
+				body: null,
+				send(body, opt = {}) {
 					if (done) return
-					resolve(new Response(data, {
-						headers: this.headers,
-						status: this.status,
-						...opt,
+					this.body = body ?? null
+					resolve(new Response(body, {
+						headers: {
+							...this.headers.toJSON(),
+							...(opt.headers ?? {}),
+						},
+						status: opt.status ?? this.status,
 					}))
 					done = true
+					onFinishEvents.forEach((f) => f())
 				},
 				sendText(content, opt) {
 					this.headers.append("Content-Type", "text/plain; charset=utf-8")
@@ -266,8 +269,11 @@ export function createServer(opts: ServerOpts = {}): Server {
 					this.headers.append("Location", location)
 					this.send(null, opt)
 				},
+				onFinish(action) {
+					onFinishEvents.push(action)
+				},
 			}
-			const curHandlers = [...handlers.values()]
+			const curHandlers = [...handlers]
 			function next() {
 				if (done) return
 				const h = curHandlers.shift()
@@ -283,26 +289,20 @@ export function createServer(opts: ServerOpts = {}): Server {
 					},
 				}
 				if (h) {
-					if (errHandler) {
-						try {
-							const res = h(ctx)
-							if (isPromise(res)) {
-								res.catch((e) => {
-									if (errHandler) {
-										errHandler(ctx, e)
-									}
-								})
-							}
-						} catch (e) {
-							errHandler(ctx, e as Error)
+					try {
+						const res = h(ctx)
+						if (isPromise(res)) {
+							res.catch((e) => {
+								if (errHandler) {
+									errHandler(ctx, e)
+								}
+							})
 						}
-					} else {
-						h(ctx)
+					} catch (e) {
+						errHandler(ctx, e as Error)
 					}
 				} else {
-					if (notFoundHandler) {
-						notFoundHandler(ctx)
-					}
+					notFoundHandler(ctx)
 				}
 			}
 			next()
@@ -313,12 +313,22 @@ export function createServer(opts: ServerOpts = {}): Server {
 		...opts,
 		websocket,
 		fetch,
+		development: isDev,
 	})
 
-	const handlers: Registry<Handler> = new Registry()
+	const handlers: Handler[] = []
 	const use = (handler: Handler) => handlers.push(handler)
-	let errHandler: ErrorHandler | null = null
-	let notFoundHandler: NotFoundHandler | null = null
+	let errHandler: ErrorHandler = ({ req, res, next }, err) => {
+		// TODO: async error doesn't send response in dev mode
+		if (isDev) throw err
+		console.error(err)
+		res.status = 500
+		res.sendText(`internal server error`)
+	}
+	let notFoundHandler: NotFoundHandler = ({ res }) => {
+		res.status = 404
+		res.sendText("not found")
+	}
 
 	return {
 		use: use,
@@ -326,6 +336,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 		notFound: (action: NotFoundHandler) => notFoundHandler = action,
 		stop: bunServer.stop.bind(bunServer),
 		hostname: bunServer.hostname,
+		url: bunServer.url,
 		port: bunServer.port,
 		ws: {
 			clients: wsClients,
@@ -484,6 +495,158 @@ export function dir(route = "", root = ""): Handler {
 	}
 }
 
+export type RateLimiterOpts = {
+	time: number,
+	limit: number,
+	handler: Handler,
+}
+
+export function rateLimiter(opts: RateLimiterOpts): Handler {
+	const reqCounter: Record<string, number> = {}
+	return (ctx) => {
+		const ip = ctx.req.getIP()
+		if (!ip) return ctx.next()
+		if (!(ip in reqCounter)) {
+			reqCounter[ip] = 0
+		}
+		reqCounter[ip] += 1
+		setTimeout(() => {
+			reqCounter[ip] -= 1
+			if (reqCounter[ip] === 0) {
+				delete reqCounter[ip]
+			}
+		}, opts.time * 1000)
+		if (reqCounter[ip] > opts.limit) {
+			ctx.res.status = 429
+			return opts.handler(ctx)
+		}
+		return ctx.next()
+	}
+}
+
+export function toHTTPDate(d: Date) {
+	return d.toUTCString()
+}
+
+export type LoggerOpts = {
+	file?: string,
+	stdio?: boolean,
+	filter?: (req: Req, res: Res) => boolean,
+}
+
+export function toReadableSize(byteSize: number) {
+	const toFixed = (n: number) => Number(n.toFixed(2))
+	if (byteSize >= Math.pow(1024, 4)) {
+		return `${toFixed(byteSize / 1024 / 1024 / 1024 / 1024)}tb`
+	} else if (byteSize >= Math.pow(1024, 3)) {
+		return `${toFixed(byteSize / 1024 / 1024 / 1024)}gb`
+	} else if (byteSize >= Math.pow(1024, 2)) {
+		return `${toFixed(byteSize / 1024 / 1024)}mb`
+	} else if (byteSize >= Math.pow(1024, 1)) {
+		return `${toFixed(byteSize / 1024)}kb`
+	} else {
+		return `${byteSize}b`
+	}
+}
+
+// TODO: is there a way to get bun calculated Content-Length result?
+// TODO: ReadableStream?
+export function getBodySize(body: BodyInit) {
+	if (typeof body === "string") {
+		return Buffer.byteLength(body)
+	} else if (body instanceof Blob) {
+		return body.size
+	} else if (body instanceof ArrayBuffer || "byteLength" in body) {
+		return body.byteLength
+	} else if (body instanceof URLSearchParams) {
+		return Buffer.byteLength(body.toString())
+	} else if (body instanceof FormData) {
+		let size = 0
+		body.forEach((v, k) => {
+			if (typeof v === "string") {
+				size += Buffer.byteLength(v)
+			} else {
+				size += v.size
+			}
+		})
+		return size
+	}
+}
+
+type LoggerMsgOpts = {
+	color?: boolean,
+}
+
+// TODO: log only err / info to file / stdio?
+// TODO: can there be a onStart() to record time
+// TODO: catch error
+export function logger(opts: LoggerOpts = {}): Handler {
+	return ({ req, res, next }) => {
+		if (opts.filter) {
+			if (!opts.filter(req, res)) {
+				return next()
+			}
+		}
+		const genMsg = (msgOpts: LoggerMsgOpts = {}) => {
+			const a = mapValues(ansi, (v) => {
+				if (msgOpts.color) {
+					return v
+				} else {
+					if (typeof v === "string") {
+						return ""
+					} else if (typeof v === "function") {
+						return () => ""
+					}
+					return v
+				}
+			})
+			const endTime = new Date()
+			const msg = []
+			const year = endTime.getUTCFullYear().toString().padStart(4, "0")
+			const month = (endTime.getUTCMonth() + 1).toString().padStart(2, "0")
+			const date = endTime.getUTCDate().toString().padStart(2, "0")
+			const hour = endTime.getUTCHours().toString().padStart(2, "0")
+			const minute = endTime.getUTCMinutes().toString().padStart(2, "0")
+			const seconds = endTime.getUTCSeconds().toString().padStart(2, "0")
+			// TODO: why this turns dim red for 4xx and 5xx responses?
+			msg.push(`${a.dim}[${year}-${month}-${date} ${hour}:${minute}:${seconds}]${a.reset}`)
+			const statusClor = {
+				"1": a.yellow,
+				"2": a.green,
+				"3": a.blue,
+				"4": a.red,
+				"5": a.red,
+			}[res.status.toString()[0]] ?? a.yellow
+			msg.push(`${a.bold}${statusClor}${res.status}${a.reset}`)
+			msg.push(req.method)
+			msg.push(req.url.pathname)
+			msg.push(`${a.dim}${endTime.getTime() - startTime.getTime()}ms${a.reset}`)
+			const size = res.body ? getBodySize(res.body) : 0
+			if (size) {
+				msg.push(`${a.dim}${toReadableSize(size)}${a.reset}`)
+			}
+			return msg.join(" ")
+		}
+		const startTime = new Date()
+		res.onFinish(() => {
+			if (opts.stdio !== false) {
+				const log = {
+					"1": console.log,
+					"2": console.log,
+					"3": console.log,
+					"4": console.error,
+					"5": console.error,
+				}[res.status.toString()[0]] ?? console.log
+				log(genMsg({ color: true }))
+			}
+			if (opts.file) {
+				fs.appendFileSync(opts.file, genMsg({ color: false }) + "\n", "utf8")
+			}
+		})
+		return next()
+	}
+}
+
 const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
 const parentPath = (p: string, sep = "/") => p.split(sep).slice(0, -1).join(sep)
 
@@ -530,7 +693,7 @@ export type ColumnDef = {
 	unique?: boolean,
 	default?: string | number,
 	index?: boolean,
-	search?: boolean,
+	fts?: boolean,
 	reference?: {
 		table: string,
 		column: string,
@@ -541,9 +704,32 @@ export type CreateDatabaseOpts = {
 	wal?: boolean,
 }
 
-export type SQLVars = Record<string, string | number | boolean>
-export type SQLData = Record<string, string | number | boolean>
-export type WhereCondition = Record<string, string | { value: string, op: string }>
+export type WhereOp =
+	| "="
+	| ">"
+	| "<"
+	| ">="
+	| "<="
+	| "!="
+	| "BETWEEN"
+	| "LIKE"
+	| "IN"
+	| "NOT BETWEEN"
+	| "NOT LIKE"
+	| "NOT IN"
+
+export type WhereOpSingle =
+	| "IS NULL"
+	| "IS NOT NULL"
+
+export type WhereValue =
+	| string
+	| { value: string, op: WhereOp }
+	| { op: WhereOpSingle }
+
+export type DBVars = Record<string, string | number | boolean | Uint8Array>
+export type DBData = Record<string, string | number | boolean | Uint8Array>
+export type WhereCondition = Record<string, WhereValue>
 export type OrderCondition = {
 	columns: string[],
 	desc?: boolean,
@@ -551,22 +737,48 @@ export type OrderCondition = {
 export type LimitCondition = number
 
 export type SelectOpts = {
-	columns?: "*" | string[],
+	columns?: "*" | ColumnName[],
 	distinct?: boolean,
 	where?: WhereCondition,
 	order?: OrderCondition,
 	limit?: LimitCondition,
+	join?: JoinTable<any>[],
+}
+
+export type ColumnName = string | {
+	name: string,
+	as: string,
+}
+
+export type JoinType =
+	| "INNER"
+	| "LEFT"
+	| "RIGHT"
+	| "FULL"
+
+export type JoinTable<D> = {
+	table: Table<D>,
+	columns?: "*" | ColumnName[],
+	on: {
+		column: string,
+		matchTable: Table<any>,
+		matchColumn: string,
+	},
+	where?: WhereCondition,
+	order?: OrderCondition,
+	join?: JoinType,
 }
 
 export type TableSchema = Record<string, ColumnDef>
 
-export type Table<D> = {
-	select: (opts?: SelectOpts) => D[],
+export type Table<D = DBData> = {
+	name: string,
+	select: <D2 = D>(opts?: SelectOpts) => D2[],
 	insert: (data: D) => void,
-	update: (data: D, where: WhereCondition) => void,
+	update: (data: Partial<D>, where: WhereCondition) => void,
 	delete: (where: WhereCondition) => void,
-	find: (where: WhereCondition) => D,
-	findAll: (where: WhereCondition) => D[],
+	find: <D2 = D>(where: WhereCondition) => D2,
+	findAll: <D2 = D>(where: WhereCondition) => D2[],
 	count: (where?: WhereCondition) => number,
 	search: (text: string) => D[],
 	schema: TableSchema,
@@ -579,13 +791,19 @@ export type TableOpts<D> = {
 	initData?: D[],
 }
 
-// TODO: D depends on timeCreated, timeUpdated and paranoid
+type TableData<D extends DBData, O extends TableOpts<D>> =
+	(O extends { timeCreated: true } ? D & { time_created?: string } : D)
+	& (O extends { timeUpdated: true } ? D & { time_updated?: string } : D)
+	& (O extends { paranoid: true } ? D & { time_deleted?: string } : D)
+
+// https://discord.com/channels/508357248330760243/1203901900844572723
+// typescript has no partial type inference...
 export type Database = {
-	table: <D extends Record<string, any>>(
+	table: <D extends DBData, O extends TableOpts<D> = TableOpts<D>>(
 		name: string,
 		schema: TableSchema,
-		opts?: TableOpts<D>,
-	) => Table<D>,
+		opts?: O,
+	) => Table<TableData<D, O>>,
 	transaction: (action: () => void) => void,
 	close: () => void,
     serialize: (name?: string) => Buffer,
@@ -610,12 +828,24 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 		return queries[sql]
 	}
 
+	function genColumnNameSQL(columns: "*" | ColumnName[] = "*") {
+		if (!columns || columns === "*") return "*"
+		return columns.map((c) => {
+			if (typeof c === "string") return c
+			if (c.as) return `${c.name} AS ${c.as}`
+		}).join(",")
+	}
+
 	// TODO: support OR
-	function genWhereSQL(where: WhereCondition, vars: SQLVars) {
+	function genWhereSQL(where: WhereCondition, vars: DBVars) {
 		return `WHERE ${Object.entries(where).map(([k, v]) => {
 			if (typeof v === "object") {
-				vars[`$where_${k}`] = v.value
-				return `${k} ${v.op} $where_${k}`
+				if ("value" in v) {
+					vars[`$where_${k}`] = v.value
+					return `${k} ${v.op} $where_${k}`
+				} else {
+					return `${k} ${v.op}`
+				}
 			} else {
 				vars[`$where_${k}`] = v
 				return `${k} = $where_${k}`
@@ -627,23 +857,31 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 		return `ORDER BY ${order.columns.join(", ")}${order.desc ? " DESC" : ""}`
 	}
 
-	function genLimitSQL(limit: LimitCondition, vars: SQLVars) {
+	function genLimitSQL(limit: LimitCondition, vars: DBVars) {
 		vars["$limit"] = limit
 		return `LIMIT $limit`
 	}
 
 	// TODO: support multiple values
-	function genValuesSQL(data: SQLData, vars: SQLVars) {
+	function genValuesSQL(data: DBData, vars: DBVars) {
 		return `VALUES (${Object.entries(data).map(([k, v]) => {
 			vars[`$value_${k}`] = v
 			return `$value_${k}`
 		}).join(", ")})`
 	}
 
-	function genSetSQL(data: SQLData, vars: SQLVars) {
+	const specialVars = new Set([
+		"CURRENT_TIMESTAMP",
+	])
+
+	function genSetSQL(data: DBData, vars: DBVars) {
 		return `SET ${Object.entries(data).map(([k, v]) => {
-			vars[`$set_${k}`] = v
-			return `${k} = $set_${k}`
+			if (typeof v === "string" && specialVars.has(v)) {
+				return `${k} = ${v}`
+			} else {
+				vars[`$set_${k}`] = v
+				return `${k} = $set_${k}`
+			}
 		}).join(", ")}`
 	}
 
@@ -675,7 +913,7 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 	function table<D extends Record<string, any>>(
 		tableName: string,
 		schema: TableSchema,
-		opts: TableOpts<D> = {}
+		topts: TableOpts<D> = {}
 	): Table<D> {
 
 		if (tableName.endsWith("_fts")) {
@@ -701,7 +939,7 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 			return item
 		}
 
-		function transformItems(items: any[]): D[] {
+		function transformItems(items: any[]): any[] {
 			if (!needsTransform) return items;
 			return items.map(transformItem)
 		}
@@ -716,20 +954,20 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 CREATE TABLE ${tableName} (
 ${genColumnsSQL({
 ...schema,
-...(opts.timeCreated ? {
+...(topts.timeCreated ? {
 	"time_created": { type: "TEXT", default: "CURRENT_TIMESTAMP" },
 } : {}),
-...(opts.timeUpdated ? {
+...(topts.timeUpdated ? {
 	"time_updated": { type: "TEXT", default: "CURRENT_TIMESTAMP" },
 } : {}),
-...(opts.paranoid ? {
+...(topts.paranoid ? {
 	"time_deleted": { type: "TEXT", allowNull: true },
 } : {}),
 })}
 )
 			`)
 			const pks = []
-			const searches = []
+			const fts = []
 			for (const colName in schema) {
 				const config = schema[colName]
 				if (config.primaryKey) {
@@ -740,11 +978,14 @@ ${genColumnsSQL({
 CREATE INDEX idx_${tableName}_${colName} ON ${tableName}(${colName})
 					`)
 				}
-				if (config.search) {
-					searches.push(colName)
+				if (config.fts) {
+					fts.push(colName)
 				}
 			}
-			if (opts.timeUpdated) {
+			if (topts.timeUpdated) {
+				if (pks.length === 0) {
+					throw new Error("time updated requires primary key")
+				}
 				run(`
 CREATE TRIGGER trigger_${tableName}_time_updated
 AFTER UPDATE ON ${tableName}
@@ -755,17 +996,17 @@ BEGIN
 END
 				`)
 			}
-			if (searches.length > 0) {
+			if (fts.length > 0) {
 				// TODO: content / content_rowid?
 				run(`
-CREATE VIRTUAL TABLE ${tableName}_fts USING fts5 (${[...pks, ...searches].join(", ")})
+CREATE VIRTUAL TABLE ${tableName}_fts USING fts5 (${[...pks, ...fts].join(", ")})
 			`)
 			run(`
 CREATE TRIGGER trigger_${tableName}_fts_insert
 AFTER INSERT ON ${tableName}
 BEGIN
-	INSERT INTO ${tableName}_fts (${[...pks, ...searches].join(", ")})
-	VALUES (${[...pks, ...searches].map((c) => `NEW.${c}`).join(", ")});
+	INSERT INTO ${tableName}_fts (${[...pks, ...fts].join(", ")})
+	VALUES (${[...pks, ...fts].map((c) => `NEW.${c}`).join(", ")});
 END
 				`)
 				run(`
@@ -773,7 +1014,7 @@ CREATE TRIGGER trigger_${tableName}_fts_update
 AFTER UPDATE ON ${tableName}
 BEGIN
 	UPDATE ${tableName}_fts
-	SET ${searches.map((c) => `${c} = NEW.${c}`).join(", ")}
+	SET ${fts.map((c) => `${c} = NEW.${c}`).join(", ")}
 	WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
 END
 				`)
@@ -787,23 +1028,52 @@ END
 				`)
 			}
 
-			if (opts.initData) {
-				opts.initData.forEach(insert)
+			if (topts.initData) {
+				topts.initData.forEach(insert)
 			}
 
 		}
 
 		// TODO: transform types?
-		function select(opts: SelectOpts = {}) {
+		function select<D2 = D>(opts: SelectOpts = {}): D2[] {
 			const vars = {}
+			if (topts.paranoid) {
+				opts.where = {
+					...(opts.where ?? {}),
+					"time_deleted": { op: "IS NULL" },
+				}
+			}
+			if (opts.join) {
+				// TODO: support where from join tables
+				const colNames = (t: string, cols: ColumnName[] | "*" = "*") => {
+					const c = cols === "*" ? ["*"] : cols
+					return c
+						.filter((name) => name)
+						.map((c) => {
+							if (typeof c === "string") {
+								return `${t}.${c}`
+							} else {
+								return `${t}.${c.name} AS ${c.as}`
+							}
+						})
+						.join(", ")
+				}
+				const items = compile(`
+SELECT${opts.distinct ? " DISTINCT" : ""} ${colNames(tableName, opts.columns)}, ${opts.join.map((j) => colNames(j.table.name, j.columns)).join(", ")}
+FROM ${tableName}
+${opts.join.map((j) => `${j.join ? j.join.toUpperCase() + " " : ""}JOIN ${j.table.name} ON ${j.table.name}.${j.on.column} = ${j.on.matchTable.name}.${j.on.matchColumn}`).join("\n")}
+${opts.where ? genWhereSQL(opts.where, vars) : ""}
+				`).all(vars) ?? []
+				return items as D2[]
+			}
 			const items = compile(`
-SELECT${opts.distinct ? " DISTINCT" : ""} ${!opts.columns || opts.columns === "*" ? "*" : opts.columns.join(", ")}
+SELECT${opts.distinct ? " DISTINCT" : ""} ${genColumnNameSQL(opts.columns)}
 FROM ${tableName}
 ${opts.where ? genWhereSQL(opts.where, vars) : ""}
 ${opts.order ? genOrderSQL(opts.order) : ""}
 ${opts.limit ? genLimitSQL(opts.limit, vars) : ""}
-			`).all(vars) as D[] ?? []
-			return transformItems(items)
+			`).all(vars) ?? []
+			return transformItems(items) as D2[]
 		}
 
 		function count(where?: WhereCondition) {
@@ -813,14 +1083,14 @@ ${opts.limit ? genLimitSQL(opts.limit, vars) : ""}
 			return Number(compile(sql).all(vars)[0]["COUNT(*)"])
 		}
 
-		function findAll(where: WhereCondition) {
+		function findAll<D2 = D>(where: WhereCondition): D2[] {
 			return select({
 				where: where,
 			})
 		}
 
-		function find(where: WhereCondition) {
-			return select({
+		function find<D2 = D>(where: WhereCondition): D2 {
+			return select<D2>({
 				where: where,
 				limit: 1,
 			})[0]
@@ -845,23 +1115,22 @@ ${genValuesSQL(data, vars)}
 			`).run(vars)
 		}
 
-		function update(data: D, where: WhereCondition) {
+		function update(data: Partial<D>, where: WhereCondition) {
 			const vars = {}
 			const keys = Object.keys(data)
 			compile(`
 UPDATE ${tableName}
-${genSetSQL(data, vars)}
+${genSetSQL(data as DBData, vars)}
 ${genWhereSQL(where, vars)}
 			`).run(vars)
 		}
 
 		function remove(where: WhereCondition) {
 			const vars = {}
-			if (opts.paranoid) {
-				// TODO
+			if (topts.paranoid) {
 				// @ts-ignore
 				update({
-					timeDeleted: "CURRENT_TIMESTAMP",
+					"time_deleted": "CURRENT_TIMESTAMP",
 				}, where)
 			} else {
 				compile(`
@@ -872,6 +1141,7 @@ ${genWhereSQL(where, vars)}
 		}
 
 		return {
+			name: tableName,
 			select,
 			find,
 			findAll,
@@ -915,18 +1185,7 @@ export type ResponseOpts = {
 	headers?: Record<string, string>,
 }
 
-export function getCookies(req: Request) {
-	const str = req.headers.get("Cookie")
-	if (!str) return {}
-	const cookies: Record<string, string> = {}
-	for (const c of str.split(";")) {
-		const [k, v] = c.split("=")
-		cookies[k.trim()] = v.trim()
-	}
-	return cookies
-}
-
-export function kvList(props: Record<string, string | boolean>) {
+export function kvList(props: Record<string, string | boolean | number>) {
 	return Object.entries(props)
 		.filter(([k, v]) => v)
 		.map(([k, v]) => v === true ? k : `${k}=${v}`)
@@ -948,10 +1207,62 @@ export async function getReqData(req: Request) {
 	}
 }
 
-// html text builder
-export function h(tagname: string, attrs: Record<string, any>, children?: string | string[]) {
+export function formToJSON(form: FormData) {
+	const json: any = {}
+	form.forEach((v, k) => json[k] = v)
+	return json
+}
 
-	let html = `<${tagname}`
+export function getFormText(form: FormData, key: string): string | undefined {
+	const t = form.get(key)
+	if (typeof t === "string") {
+		return t
+	}
+}
+
+export function getFormBlob(form: FormData, key: string): Blob | undefined {
+	const b = form.get(key)
+	if (b && b instanceof Blob && b.size > 0) {
+		return b
+	}
+}
+
+export async function getFormBlobData(form: FormData, key: string) {
+	const b = getFormBlob(form, key)
+	if (b) {
+		return new Uint8Array(await b.arrayBuffer())
+	}
+}
+
+export function getBasicAuth(req: Req): [string, string] | void {
+	const auth = req.headers.get("Authorization")
+	if (!auth) return
+	const [ scheme, cred ] = auth.split(" ")
+	if (scheme.toLowerCase() !== "basic") return
+	if (!cred) return
+	const [ user, pass ] = atob(cred).split(":")
+	return [ user, pass ]
+}
+
+export function getBearerAuth(req: Req): string | void {
+	const auth = req.headers.get("Authorization")
+	if (!auth) return
+	const [ scheme, cred ] = auth.split(" ")
+	if (scheme.toLowerCase() !== "bearer") return
+	return cred
+}
+
+export type HTMLChild = string | number | undefined | null
+export type HTMLChildren = HTMLChild | HTMLChild[]
+
+// html text builder
+export function h(
+	tag: string,
+	attrs: Record<string, any>,
+	children?: HTMLChildren
+) {
+
+	let html = `<${tag}`
 
 	for (const k in attrs) {
 		let v = attrs[k]
@@ -990,7 +1301,7 @@ export function h(tagname: string, attrs: Record<string, any>, children?: string
 	}
 
 	if (children !== undefined && children !== null) {
-		html += `</${tagname}>`
+		html += `</${tag}>`
 	}
 
 	return html
@@ -1120,6 +1431,13 @@ function mapKeys<D>(obj: Record<string, D>, mapFn: (k: string) => string) {
 	}, {})
 }
 
+function mapValues<A, B>(obj: Record<string, A>, mapFn: (v: A) => B) {
+	return Object.keys(obj).reduce((result: Record<string, B>, key) => {
+		result[key] = mapFn(obj[key])
+		return result
+	}, {})
+}
+
 export type CSSLibOpts = {
 	breakpoints?: Record<string, number>,
 }
@@ -1217,6 +1535,9 @@ export async function js(file: string) {
 	}
 	const res = await Bun.build({
 		entrypoints: [file],
+		minify: !isDev,
+		sourcemap: isDev ? "inline" : "none",
+		target: "browser",
 	})
 	if (res.success) {
 		if (res.outputs.length !== 1) {
@@ -1241,7 +1562,7 @@ export function jsData(name: string, data: any) {
 }
 
 export type CronUnit = string
-export type CronDef =
+export type CronRule =
 	| `${CronUnit} ${CronUnit} ${CronUnit} ${CronUnit} ${CronUnit}`
 	| "yearly"
 	| "monthly"
@@ -1250,45 +1571,35 @@ export type CronDef =
 	| "hourly"
 	| "minutely"
 
-export function cron(freq: CronDef, action: () => void) {
-	if (freq === "yearly") return cron("0 0 1 1 *", action)
-	if (freq === "monthly") return cron("0 0 1 * *", action)
-	if (freq === "weekly") return cron("0 0 * * 0", action)
-	if (freq === "daily") return cron("0 0 * * *", action)
-	if (freq === "hourly") return cron("0 * * * *", action)
-	if (freq === "minutely") return cron("* * * * *", action)
+const isReal = (n: any) => n !== undefined && n !== null && !isNaN(n)
+
+// TODO: support intervals
+export function cron(rule: CronRule, action: () => void) {
+	if (rule === "yearly") return cron("0 0 1 1 *", action)
+	if (rule === "monthly") return cron("0 0 1 * *", action)
+	if (rule === "weekly") return cron("0 0 * * 0", action)
+	if (rule === "daily") return cron("0 0 * * *", action)
+	if (rule === "hourly") return cron("0 * * * *", action)
+	if (rule === "minutely") return cron("* * * * *", action)
 	let paused = false
-	const [min, hour, date, month, day] = freq
+	const [min, hour, date, month, day] = rule
 		.split(" ")
-		.map((def) => def === "*" ? "*" : def.split(","))
-	function match(n: number, pats: "*" | string[]) {
-		if (pats === "*") return true
-		for (const pat of pats) {
-			if (Number(pat) === n) return true
-			if (pat.startsWith("*/")) {
-				const interval = Number(pat.substring(2))
-				if (n % interval === 0) return true
-			}
-		}
-		return false
-	}
+		.map((def) => def === "*" ? "*" : new Set(def.split(",").map(Number).filter(isReal)))
 	function run() {
 		if (paused) return
-		const time = new Date()
-		if (!match(time.getMonth() + 1, month)) return
-		if (!match(time.getDate(), date)) return
-		if (!match(time.getDay(), day)) return
-		if (!match(time.getHours(), hour)) return
-		if (!match(time.getMinutes(), min)) return
+		const now = new Date()
+		if (month !== "*" && !month.has(now.getUTCMonth() + 1)) return
+		if (date !== "*" && !date.has(now.getUTCDate())) return
+		if (day !== "*" && !day.has(now.getUTCDay())) return
+		if (hour !== "*" && !hour.has(now.getUTCHours())) return
+		if (min !== "*" && !min.has(now.getUTCMinutes())) return
 		action()
 	}
 	const timeout = setInterval(run, 1000 * 60)
 	run()
 	return {
 		action: action,
-		cancel: () => {
-			clearInterval(timeout)
-		},
+		cancel: () => clearInterval(timeout),
 		get paused() {
 			return paused
 		},
@@ -1296,4 +1607,41 @@ export function cron(freq: CronDef, action: () => void) {
 			paused = p
 		},
 	}
+}
+
+const alphaNumChars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// TODO: filter bad words?
+export function randAlphaNum(len: number = 11) {
+	let str = ""
+	for (let i = 0; i < len; i++) {
+		str += alphaNumChars.charAt(Math.floor(Math.random() * alphaNumChars.length))
+	}
+	return str
+}
+
+export const ansi = {
+	reset:     "\x1b[0m",
+	black:     "\x1b[30m",
+	red:       "\x1b[31m",
+	green:     "\x1b[32m",
+	yellow:    "\x1b[33m",
+	blue:      "\x1b[34m",
+	magenta:   "\x1b[35m",
+	cyan:      "\x1b[36m",
+	white:     "\x1b[37m",
+	blackbg:   "\x1b[40m",
+	redbg:     "\x1b[41m",
+	greenbg:   "\x1b[42m",
+	yellowbg:  "\x1b[43m",
+	bluebg:    "\x1b[44m",
+	magentabg: "\x1b[45m",
+	cyanbg:    "\x1b[46m",
+	whitebg:   "\x1b[47m",
+	bold:      "\x1b[1m",
+	dim:       "\x1b[2m",
+	italic:    "\x1b[3m",
+	underline: "\x1b[4m",
+	rgb: (r: number, g: number, b: number) => `\x1b[38;2;${r};${g};${b}m`,
+	rgbbg: (r: number, g: number, b: number) => `\x1b[48;2;${r};${g};${b}m`,
 }
