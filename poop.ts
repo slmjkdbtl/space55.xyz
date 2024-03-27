@@ -2,19 +2,20 @@ import * as fs from "fs"
 import * as path from "path"
 import { h, css, csslib } from "./www"
 
-const entries = fs.readdirSync("files/poop")
+const DIR = "files/poop"
+
+const entries = fs.readdirSync(DIR)
 	.filter((entry) => !entry.startsWith(".") && entry.endsWith(".txt"))
 	.sort((a, b) => a > b ? -1 : 1)
 	.map((f) => ({
 		title: path.basename(f, ".txt"),
-		content: fs.readFileSync(`files/poop/${f}`, "utf8")
+		content: fs.readFileSync(path.join(DIR, f), "utf8")
 	}))
 
 export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("head", {}, [
-		h("title", {}, "poop"),
+		h("title", {}, "嗯！嗯！！"),
 		h("meta", { charset: "utf-8", }),
-		h("meta", { name: "description", content: "tga's homepage", }),
 		h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
 		h("link", { rel: "icon", href: "/static/img/icon.png" }),
 		h("style", {}, csslib()),
@@ -28,7 +29,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				"padding": "24px",
 			},
 			"main": {
-				"max-width": "640px",
+				"max-width": "480px",
 				"width": "100%",
 				"margin": "0 auto",
 			},

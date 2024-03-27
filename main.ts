@@ -6,6 +6,7 @@ import {
 } from "./www"
 import index from "./index"
 import poop from "./poop"
+import diary from "./diary"
 import js from "./js"
 
 const server = createServer({ port: Bun.env["PORT"] ?? 80 })
@@ -20,6 +21,7 @@ server.use(files("/static", "static"))
 server.use(dir("/files", "files"))
 server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
+server.use(route("GET", "/diary", ({ res }) => res.sendHTML(diary)))
 server.use(route("GET", "/js", ({ res }) => res.sendHTML(js)))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), { status: 303 })))
 
