@@ -1,7 +1,17 @@
 {
-	"type": "module",
+	"name": "space55",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"check": "tsc"
+	},
 	"devDependencies": {
-		"@types/bun": "^1.0.5",
-		"typescript": "^5.3.3"
+		"@cloudflare/workers-types": "^4.20240320.1",
+		"@types/node": "^20.12.2",
+		"typescript": "^5.0.4",
+		"wrangler": "^3.0.0"
 	}
 }

@@ -1,17 +1,19 @@
 {
 	"compilerOptions": {
-		"lib": ["ESNext"],
+		"target": "es2021",
+		"lib": ["esnext"],
 		"module": "esnext",
-		"target": "esnext",
 		"moduleResolution": "bundler",
-		"moduleDetection": "force",
-		"allowImportingTsExtensions": true,
+		"types": [
+			"@cloudflare/workers-types/2023-07-01",
+			"@types/node"
+		],
+		"resolveJsonModule": true,
 		"noEmit": true,
-		"composite": true,
-		"strict": true,
-		"downlevelIteration": true,
-		"skipLibCheck": true,
+		"isolatedModules": true,
 		"allowSyntheticDefaultImports": true,
-		"forceConsistentCasingInFileNames": true
+		"forceConsistentCasingInFileNames": true,
+		"strict": true,
+		"skipLibCheck": true
 	}
 }
