@@ -9,8 +9,6 @@ import poop from "./poop"
 import days from "./days"
 
 export type Env = {
-	BUCKET: R2Bucket,
-	DB: D1Database,
 	__STATIC_CONTENT: KVNamespace,
 }
 
