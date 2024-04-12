@@ -41,4 +41,4 @@ server.notFound(({ res }) => res.sendText("404", { status: 404 }))
 
 export default {
 	fetch: server.fetch,
-}
+} satisfies ExportedHandler<Env>

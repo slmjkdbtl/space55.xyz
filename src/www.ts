@@ -1,4 +1,7 @@
+import * as crypto from "node:crypto"
 import * as path from "node:path"
+
+// https://kerkour.com/sqlite-for-servers
 
 const isPromise = (input: any): input is Promise<any> => {
 	return input
@@ -34,7 +37,7 @@ type ResBase = {
 type ResWithFS = ResBase & {
 	sendFile: (
 		path: string,
-		opt?: ResOpt & { mimes?: Record<string, string> }
+		opt?: SendFileOpt,
 	) => Promise<void>,
 }
 
@@ -44,6 +47,12 @@ export type Res<Env> =
 export type ResOpt = {
 	headers?: HeadersInit,
 	status?: number,
+}
+
+export type SendFileOpt = {
+	headers?: HeadersInit,
+	status?: number,
+	mimes?: Record<string, string>,
 }
 
 export type KVValFormat =
@@ -87,9 +96,7 @@ function createFS(kv: KVNamespace, manifest: Record<string, string>) {
 	}
 
 	const readFile = async (path: string, format: KVValFormat = "text") => {
-		if (!manifest[path]) {
-			throw new Error(`Not in asset manifest: ${path}`)
-		}
+		if (!manifest[path]) return null
 		return await kv.get(manifest[path], {
 			// @ts-ignore
 			type: format,
@@ -165,6 +172,7 @@ export type ErrorHandler<Env> = (ctx: Ctx<Env>, err: Error) => void
 export type NotFoundHandler<Env> = (ctx: Ctx<Env>) => void
 
 export type Server<Env> = {
+	init: (handler: Handler<Env>) => void,
 	use: (handler: Handler<Env>) => void,
 	error: (handler: ErrorHandler<Env>) => void,
 	notFound: (action: NotFoundHandler<Env>) => void,
@@ -231,6 +239,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 		}
 	} catch {}
 
+	const etags: Record<string, string> = {}
 	const fetch: ExportedHandlerFetchHandler<Env> = async (cfReq, env) => {
 
 		return new Promise((resolve) => {
@@ -247,9 +256,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				arrayBuffer: cfReq.arrayBuffer.bind(cfReq),
 				formData: cfReq.formData.bind(cfReq),
 				blob: cfReq.blob.bind(cfReq),
-				getIP: () => {
-					return cfReq.headers.get("CF-Connecting-IP")
-				},
+				getIP: () => cfReq.headers.get("CF-Connecting-IP"),
 				getCookies: () => {
 					const str = cfReq.headers.get("Cookie")
 					if (!str) return {}
@@ -270,6 +277,24 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				fs = createFS(env.__STATIC_CONTENT as KVNamespace, assetManifest)
 			}
 
+			const headers = new Headers()
+			let resBody: null
+
+			function etagHits(key = req.url.toString()) {
+				const ifNoneMatch = req.headers.get("If-None-Match")
+				if (!ifNoneMatch) return false
+				const clientEtag = ifNoneMatch
+					.replaceAll("\"", "")
+					.replaceAll("W/", "")
+				return clientEtag === etags[key]
+			}
+
+			function genEtag(key = req.url.toString()) {
+				const etag = crypto.randomUUID()
+				headers.append("ETag", etag)
+				etags[key] = etag
+			}
+
 			function finish(res: Response) {
 				if (done) return
 				resolve(res)
@@ -277,51 +302,64 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				onFinishEvents.forEach((f) => f())
 			}
 
+			function send(body: BodyInit | null, opt: ResOpt = {}) {
+				if (done) return
+				finish(new Response(body, {
+					headers: {
+						...headersToJSON(headers),
+						...(opt.headers ?? {}),
+					},
+					status: opt.status ?? 200,
+				}))
+			}
+
+			function sendText(content: string, opt: ResOpt = {}) {
+				headers.append("Content-Type", "text/plain; charset=utf-8")
+				send(content, opt)
+			}
+
+			function sendHTML(content: string, opt: ResOpt = {}) {
+				headers.append("Content-Type", "text/html; charset=utf-8")
+				send(content, opt)
+			}
+
+			function sendJSON(content: unknown, opt: ResOpt = {}) {
+				headers.append("Content-Type", "application/json; charset=utf-8")
+				send(JSON.stringify(content), opt)
+			}
+
+			async function sendFile(p: string, opt: SendFileOpt = {}) {
+				if (!fs) {
+					return next()
+				}
+				if (etagHits(p)) {
+					return send(null, {
+						status: 304,
+					})
+				}
+				const data = await fs.readFile(p, "arrayBuffer")
+				if (data === null) {
+					return next()
+				}
+				const mime = fs.guessMime(p, opt?.mimes)
+				if (mime) {
+					headers.append("Content-Type", mime)
+				}
+				genEtag(p)
+				send(data, opt)
+			}
+
+			function redirect(url: string, status: number = 302) {
+				finish(Response.redirect(url, status))
+			}
+
 			// @ts-ignore
 			const res: Res<Env> = {
-				headers: new Headers(),
-				status: 200,
-				body: null,
-				send(body, opt = {}) {
-					if (done) return
-					this.body = body ?? null
-					finish(new Response(body, {
-						headers: {
-							...headersToJSON(this.headers),
-							...(opt.headers ?? {}),
-						},
-						status: opt.status ?? this.status,
-					}))
-				},
-				sendText(content, opt) {
-					this.headers.append("Content-Type", "text/plain; charset=utf-8")
-					this.send(content, opt)
-				},
-				sendHTML(content, opt) {
-					this.headers.append("Content-Type", "text/html; charset=utf-8")
-					this.send(content, opt)
-				},
-				sendJSON(content, opt) {
-					this.headers.append("Content-Type", "application/json; charset=utf-8")
-					this.send(JSON.stringify(content), opt)
-				},
-				async sendFile(p, opt) {
-					if (!fs) {
-						throw new Error("No fs")
-					}
-					const data = await fs.readFile(p, "arrayBuffer")
-					if (data === null) {
-						return next()
-					}
-					const mime = fs.guessMime(p, opt?.mimes)
-					if (mime) {
-						this.headers.append("Content-Type", mime)
-					}
-					this.send(data, opt)
-				},
-				redirect(url: string, status: number = 302) {
-					finish(Response.redirect(url, status))
-				},
+				send,
+				sendText,
+				sendHTML,
+				sendJSON,
+				sendFile,
 			}
 
 			const curHandlers = [...handlers]
@@ -373,11 +411,23 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 
 	const handlers: Handler<Env>[] = []
 	const use = (handler: Handler<Env>) => handlers.push(handler)
+	let initHandler: Handler<Env> = () => {}
+	let started = false
+
+	use((ctx) => {
+		if (!started) {
+			initHandler(ctx)
+		}
+		started = true
+		ctx.next()
+	})
+
 	let errHandler: ErrorHandler<Env> = ({ req, res, next }, err) => {
 		console.error(err)
 		res.status = 500
 		res.sendText(`internal server error`)
 	}
+
 	let notFoundHandler: NotFoundHandler<Env> = ({ res }) => {
 		res.status = 404
 		res.sendText("not found")
@@ -386,6 +436,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 	return {
 		fetch: fetch,
 		use: use,
+		init: (action: Handler<Env>) => initHandler = action,
 		error: (action: ErrorHandler<Env>) => errHandler = action,
 		notFound: (action: NotFoundHandler<Env>) => notFoundHandler = action,
 	}
