@@ -79,6 +79,7 @@ type Dir = { [p: string]: Dir | string }
 function createFS(kv: KVNamespace, manifest: Record<string, string>) {
 
 	const tree: Dir = {}
+	const fileContent: Record<string, any> = {}
 
 	for (const p in manifest) {
 		const chunks = p.split("/")
@@ -96,11 +97,15 @@ function createFS(kv: KVNamespace, manifest: Record<string, string>) {
 	}
 
 	const readFile = async (path: string, format: KVValFormat = "text") => {
+		const k = `${path}:${format}`
+		if (fileContent[k]) return fileContent[k]
 		if (!manifest[path]) return null
-		return await kv.get(manifest[path], {
+		const content = await kv.get(manifest[path], {
 			// @ts-ignore
 			type: format,
 		})
+		fileContent[k] = content
+		return content
 	}
 
 	const readDir = (path: string) => {
@@ -271,27 +276,32 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 
 			const onFinishEvents: Array<() => void> = []
 			const onErrorEvents: Array<(e: Error) => void> = []
-			let fs: FS | undefined
-
-			if ("__STATIC_CONTENT" in env && assetManifest) {
-				fs = createFS(env.__STATIC_CONTENT as KVNamespace, assetManifest)
-			}
-
 			const headers = new Headers()
-			let resBody: null
+			const fs = "__STATIC_CONTENT" in env && assetManifest
+				? createFS(env.__STATIC_CONTENT as KVNamespace, assetManifest)
+				: null
 
 			function etagHits(key = req.url.toString()) {
 				const ifNoneMatch = req.headers.get("If-None-Match")
 				if (!ifNoneMatch) return false
 				const clientEtag = ifNoneMatch
-					.replaceAll("\"", "")
-					.replaceAll("W/", "")
-				return clientEtag === etags[key]
+					.replace(/^W\//, "")
+					.replace(/^"/, "")
+					.replace(/"$/, "")
+				if (clientEtag === etags[key]) {
+					send(null, {
+						status: 304,
+					})
+					return true
+				}
+				return
 			}
 
-			function genEtag(key = req.url.toString()) {
-				const etag = crypto.randomUUID()
-				headers.append("ETag", etag)
+			function genEtag(
+				key = req.url.toString(),
+				etag = crypto.randomUUID(),
+			) {
+				headers.append("ETag", `"${etag}"`)
 				etags[key] = etag
 			}
 
@@ -303,13 +313,12 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 			}
 
 			function send(body: BodyInit | null, opt: ResOpt = {}) {
-				if (done) return
 				finish(new Response(body, {
 					headers: {
 						...headersToJSON(headers),
 						...(opt.headers ?? {}),
 					},
-					status: opt.status ?? 200,
+					status: opt.status,
 				}))
 			}
 
@@ -332,11 +341,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				if (!fs) {
 					return next()
 				}
-				if (etagHits(p)) {
-					return send(null, {
-						status: 304,
-					})
-				}
+				if (etagHits(p)) return
 				const data = await fs.readFile(p, "arrayBuffer")
 				if (data === null) {
 					return next()
