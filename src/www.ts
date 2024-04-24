@@ -2,8 +2,9 @@ import * as crypto from "node:crypto"
 import * as path from "node:path"
 
 // https://kerkour.com/sqlite-for-servers
+// TODO: websocket
 
-const isPromise = (input: any): input is Promise<any> => {
+const isPromise = <T = unknown>(input: any): input is Promise<T> => {
 	return input
 		&& typeof input.then === "function"
 		&& typeof input.catch === "function"
@@ -277,6 +278,8 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 			const onFinishEvents: Array<() => void> = []
 			const onErrorEvents: Array<(e: Error) => void> = []
 			const headers = new Headers()
+			let status = 200
+			let body: null | BodyInit = null
 			const fs = "__STATIC_CONTENT" in env && assetManifest
 				? createFS(env.__STATIC_CONTENT as KVNamespace, assetManifest)
 				: null
@@ -294,7 +297,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 					})
 					return true
 				}
-				return
+				return false
 			}
 
 			function genEtag(
@@ -312,13 +315,14 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				onFinishEvents.forEach((f) => f())
 			}
 
-			function send(body: BodyInit | null, opt: ResOpt = {}) {
+			function send(b: BodyInit | null, opt: ResOpt = {}) {
+				body = b
 				finish(new Response(body, {
 					headers: {
 						...headersToJSON(headers),
 						...(opt.headers ?? {}),
 					},
-					status: opt.status,
+					status: opt.status ?? status,
 				}))
 			}
 
@@ -360,11 +364,17 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 
 			// @ts-ignore
 			const res: Res<Env> = {
+				get status() { return status },
+				set status(s) { status = s },
+				get body() { return body },
+				set body(b) { body = b },
+				headers,
 				send,
 				sendText,
 				sendHTML,
 				sendJSON,
 				sendFile,
+				redirect,
 			}
 
 			const curHandlers = [...handlers]
