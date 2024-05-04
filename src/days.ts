@@ -47,7 +47,7 @@ const handler: Handler<Env> = async ({ res, fs }) => {
 			h("title", {}, "日常"),
 			h("meta", { charset: "utf-8", }),
 			h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
-			h("link", { rel: "icon", href: "/static/img/icon.png" }),
+			h("link", { rel: "icon", href: "/static/img/tga.png" }),
 			h("style", {}, csslib()),
 			h("style", {}, css({
 				"*": {

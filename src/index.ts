@@ -313,7 +313,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 		h("meta", { charset: "utf-8", }),
 		h("meta", { name: "description", content: "tga's homepage", }),
 		h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
-		h("link", { rel: "icon", href: "/static/img/icon.png" }),
+		h("link", { rel: "icon", href: "/static/img/tga.png" }),
 		h("style", {}, css(styles)),
 	]),
 	h("body", {}, [

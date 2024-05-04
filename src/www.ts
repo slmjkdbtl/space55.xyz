@@ -17,7 +17,7 @@ export type Req = {
 	params: Record<string, string>,
 	text: () => Promise<string>,
 	arrayBuffer: () => Promise<ArrayBuffer>,
-	json<T = any>(): Promise<T>,
+	json<T = unknown>(): Promise<T>,
 	formData: () => Promise<FormData>,
 	blob: () => Promise<Blob>,
 	getIP: () => string | null,
@@ -31,7 +31,7 @@ type ResBase = {
 	send: (data?: BodyInit | null, opt?: ResOpt) => void,
 	sendText: (content: string, opt?: ResOpt) => void,
 	sendHTML: (content: string, opt?: ResOpt) => void,
-	sendJSON: <T = any>(content: T, opt?: ResOpt) => void,
+	sendJSON: <T = unknown>(content: T, opt?: ResOpt) => void,
 	redirect: (url: string, status?: number) => void,
 }
 
@@ -663,26 +663,33 @@ export type HTMLChildren = HTMLChild | HTMLChild[]
 
 function escapeHTML(input: string): string {
 	const str = String(input)
-	let out = "";
+	let out = ""
 	for (let i = 0; i < str.length; i++) {
 		const ch = str[i]
 		switch (ch) {
-			case '"': out += '&quot;'; break
-			case "'": out += '&#x27;'; break
-			case '&': out += '&amp;'; break
-			case '<': out += '&lt;'; break
-			case '>': out += '&gt;'; break
+			case "\"": out += "&quot;"; break
+			case "'": out += "&#39;"; break
+			case "&": out += "&amp;"; break
+			case "<": out += "&lt;"; break
+			case ">": out += "&gt;"; break
 			default: out += ch
 		}
 	}
-	return out;
+	return out
 }
+
+export type HTMLAttr =
+	| boolean
+	| string
+	| number
+	| string[]
+	| Record<string, string>
 
 // html text builder
 export function h(
 	tag: string,
-	attrs: Record<string, any>,
-	children?: HTMLChildren
+	attrs: Record<string, HTMLAttr>,
+	children?: HTMLChildren,
 ) {
 
 	let html = `<${tag}`
