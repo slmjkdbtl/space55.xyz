@@ -33,6 +33,7 @@ type ResBase = {
 	sendHTML: (content: string, opt?: ResOpt) => void,
 	sendJSON: <T = unknown>(content: T, opt?: ResOpt) => void,
 	redirect: (url: string, status?: number) => void,
+	websocket: (action: (server: WS) => void) => void,
 }
 
 type ResWithFS = ResBase & {
@@ -185,6 +186,14 @@ export type Server<Env> = {
 	fetch: ExportedHandlerFetchHandler<Env>,
 }
 
+export type WS = {
+	send: WebSocket["send"],
+	close: WebSocket["close"],
+	onMessage: (action: (data: ArrayBuffer | string) => void) => void,
+	onClose: (action: (code: number) => void) => void,
+	onError: (action: () => void) => void,
+}
+
 const mimes: Record<string, string> = {
 	"gif":   "image/gif",
 	"jpg":   "image/jpeg",
@@ -227,6 +236,20 @@ const mimes: Record<string, string> = {
 	"stl":   "model/stl",
 }
 
+class Registry<T> extends Map<number, T> {
+	private lastID: number = 0
+	push(v: T): number {
+		const id = this.lastID
+		this.set(id, v)
+		this.lastID++
+		return id
+	}
+	pushd(v: T): () => void {
+		const id = this.push(v)
+		return () => this.delete(id)
+	}
+}
+
 function headersToJSON(h: Headers) {
 	const json: Record<string, string> = {}
 	h.forEach((v, k) => json[k] = v)
@@ -246,6 +269,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 	} catch {}
 
 	const etags: Record<string, string> = {}
+
 	const fetch: ExportedHandlerFetchHandler<Env> = async (cfReq, env) => {
 
 		return new Promise((resolve) => {
@@ -362,6 +386,28 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				finish(Response.redirect(url, status))
 			}
 
+			function websocket(action: (ws: WS) => void) {
+				const upgradeHeader = req.headers.get("Upgrade")
+				if (!upgradeHeader || upgradeHeader !== 'websocket') {
+					return res.sendText("Expected Upgrade: websocket", { status: 426 })
+				}
+				const webSocketPair = new WebSocketPair()
+				const [client, server] = Object.values(webSocketPair)
+				server.accept()
+				const ws: WS = {
+					onMessage: (action) => server.addEventListener("message", (e) => action(e.data)),
+					onClose: (action) => server.addEventListener("close", (e) => action(e.code)),
+					onError: (action) => server.addEventListener("error", () => action()),
+					send: (data) => server.send(data),
+					close: () => server.close(),
+				}
+				action(ws)
+				return finish(new Response(null, {
+					status: 101,
+					webSocket: client,
+				}))
+			}
+
 			// @ts-ignore
 			const res: Res<Env> = {
 				get status() { return status },
@@ -375,6 +421,7 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 				sendJSON,
 				sendFile,
 				redirect,
+				websocket,
 			}
 
 			const curHandlers = [...handlers]
@@ -389,12 +436,8 @@ export async function createServer<Env extends object = {}>(): Promise<Server<En
 					next,
 					env,
 					fs,
-					onFinish(action) {
-						onFinishEvents.push(action)
-					},
-					onError(action) {
-						onErrorEvents.push(action)
-					},
+					onFinish: (action) => onFinishEvents.push(action),
+					onError: (action) => onErrorEvents.push(action),
 				}
 
 				if (h) {
