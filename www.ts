@@ -196,11 +196,6 @@ export function createServer(opts: ServerOpts = {}): Server {
 		},
 	}
 
-	const fileETags: Record<string, {
-		lastModified: number,
-		etag: string,
-	}> = {}
-
 	async function fetch(bunReq: Request): Promise<Response> {
 		return new Promise((resolve) => {
 			let done = false
@@ -290,26 +285,17 @@ export function createServer(opts: ServerOpts = {}): Server {
 				send(JSON.stringify(content), opt)
 			}
 
-			// TODO: try "Last-Modified" and "If-Modified-Since"
 			function sendFile(p: string, opt: SendFileOpt = {}) {
 				if (!isFileSync(p)) return
 				const file = Bun.file(p)
 				if (file.size === 0) return
-				const e = fileETags[p]
-				if (e) {
-					if (
-						e.lastModified === file.lastModified
-						&& e.etag === getEtag()
-					) {
-						return send(null, { status: 304 })
-					}
+				const mtimeServer = req.headers.get("If-Modified-Since")
+				const mtimeClient = toHTTPDate(new Date(file.lastModified))
+				if (mtimeServer === mtimeClient) {
+					return send(null, { status: 304 })
 				}
-				const newETag = crypto.randomUUID()
-				fileETags[p] = {
-					lastModified: file.lastModified,
-					etag: newETag,
-				}
-				headers.append("ETag", `"${newETag}"`)
+				headers.append("Last-Modified", mtimeClient)
+				headers.append("Cache-Control", "no-cache")
 				send(file, opt)
 			}
 
