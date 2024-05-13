@@ -105,7 +105,7 @@ export type Server = {
 export type ServerOpts = Omit<ServeOptions, "fetch"> | Omit<WebSocketServeOptions, "fetch">
 
 export type ServerUpgradeOpts<T = undefined> = {
-	headers?: Bun.HeadersInit,
+	headers?: HeadersInit,
 	data?: T,
 }
 
@@ -1616,17 +1616,22 @@ export function csslib(opt: CSSLibOpts = {}) {
 }
 
 // TODO: not global?
-const buildCache: Record<string, string> = {}
+const buildCache: Record<string, {
+	lastModified: number,
+	js: string,
+}> = {}
 
 // TODO: better error handling?
-export async function js(file: string) {
-	if (!isDev) {
-		if (buildCache[file]) {
-			return Promise.resolve(buildCache[file])
+export async function js(p: string) {
+	const file = Bun.file(p)
+	const cache = buildCache[p]
+	if (cache) {
+		if (file.lastModified === cache.lastModified) {
+			return Promise.resolve(cache.js)
 		}
 	}
 	const res = await Bun.build({
-		entrypoints: [file],
+		entrypoints: [p],
 		minify: !isDev,
 		sourcemap: isDev ? "inline" : "none",
 		target: "browser",
@@ -1636,8 +1641,9 @@ export async function js(file: string) {
 			throw new Error(`Expected 1 output, found ${res.outputs.length}`)
 		}
 		const code = await res.outputs[0].text()
-		if (!isDev) {
-			buildCache[file] = code
+		buildCache[p] = {
+			lastModified: file.lastModified,
+			js: code,
 		}
 		return code
 	} else {

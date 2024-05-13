@@ -1,6 +1,6 @@
 import * as fs from "fs"
 import * as path from "path"
-import { h, css, csslib } from "./www"
+import { h, css, csslib, js } from "./www"
 
 const DIR = "files/poop"
 
@@ -54,11 +54,11 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 					h("p", { class: "title" }, title),
 					h("p", { class: "content" }, content),
 					title === "在世界上所有诗后面加一句\"家人们谁懂\""
-						? h("button", { onclick: "add()" }, "加上")
+						? h("button", { id: "add-button" }, "加上")
 						: null
 				])
 			})),
 		]),
-		h("script", { src: "/static/scripts/poop.js" }, ""),
+		h("script", {}, await js("client/poop.ts")),
 	]),
 ])

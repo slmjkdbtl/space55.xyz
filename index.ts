@@ -1,4 +1,4 @@
-import { h, css } from "./www"
+import { h, css, csslib, js } from "./www"
 
 const games = [
 	{
@@ -163,7 +163,6 @@ const styles = {
 			"left": "31%",
 			"width": "10%",
 			"height": "auto",
-			"content": "url(/static/img/drawings/flower1.png)",
 
 			"&.happy": {
 				"animation": "happy 0.5s infinite",
@@ -319,7 +318,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("body", {}, [
 		h("div", { id: "dino", }, [
 			h("img", { id: "body", src: "/static/img/drawings/dino.png", alt: "dino" }),
-			h("img", { id: "flower", class: "obj", alt: "flower" }),
+			h("img", { id: "flower", class: "obj", src: "/static/img/drawings/flower1.png", alt: "flower"  }),
 		]),
 		h("img", { id: "title", src: "/static/img/misc/title.png", alt: "title", }),
 		h("div", { class: "games wrapper", }, games.map((game) => h("a", { class: "box obj", href: game.link }, [
@@ -332,6 +331,6 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 		h("div", { class: "sites wrapper", }, sites.map((site) => h("a", { class: "box obj", href: site.link }, [
 			h("img", { class: "img obj", src: `/static/img/sites/${site.name}.png`, alt: site.name, })
 		]))),
-		h("script", { src: "/static/scripts/index.js" }, ""),
+		h("script", {}, await js("client/index.ts")),
 	]),
 ])
