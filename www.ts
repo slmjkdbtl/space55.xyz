@@ -196,7 +196,10 @@ export function createServer(opts: ServerOpts = {}): Server {
 		},
 	}
 
-	const etags: Record<string, string> = {}
+	const fileETags: Record<string, {
+		lastModified: number,
+		etag: string,
+	}> = {}
 
 	async function fetch(bunReq: Request): Promise<Response> {
 		return new Promise((resolve) => {
@@ -245,28 +248,13 @@ export function createServer(opts: ServerOpts = {}): Server {
 			let status = 200
 			let body: null | BodyInit = null
 
-			function etagHits(key = req.url.toString()) {
+			function getEtag() {
 				const ifNoneMatch = req.headers.get("If-None-Match")
-				if (!ifNoneMatch) return false
-				const clientEtag = ifNoneMatch
+				if (!ifNoneMatch) return null
+				return ifNoneMatch
 					.replace(/^W\//, "")
 					.replace(/^"/, "")
 					.replace(/"$/, "")
-				if (clientEtag === etags[key]) {
-					send(null, {
-						status: 304,
-					})
-					return true
-				}
-				return false
-			}
-
-			function genEtag(
-				key = req.url.toString(),
-				etag = crypto.randomUUID(),
-			) {
-				headers.append("ETag", `"${etag}"`)
-				etags[key] = etag
 			}
 
 			function finish(res: Response) {
@@ -302,11 +290,26 @@ export function createServer(opts: ServerOpts = {}): Server {
 				send(JSON.stringify(content), opt)
 			}
 
+			// TODO: try "Last-Modified" and "If-Modified-Since"
 			function sendFile(p: string, opt: SendFileOpt = {}) {
 				if (!isFileSync(p)) return
 				const file = Bun.file(p)
 				if (file.size === 0) return
-				headers.append("Content-Type", file.type)
+				const e = fileETags[p]
+				if (e) {
+					if (
+						e.lastModified === file.lastModified
+						&& e.etag === getEtag()
+					) {
+						return send(null, { status: 304 })
+					}
+				}
+				const newETag = crypto.randomUUID()
+				fileETags[p] = {
+					lastModified: file.lastModified,
+					etag: newETag,
+				}
+				headers.append("ETag", `"${newETag}"`)
 				send(file, opt)
 			}
 
