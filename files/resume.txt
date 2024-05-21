@@ -14,10 +14,11 @@ SKILLS
 
   Game Dev
   UI/UX Design
+  Saxophone
 
 EXPERIENCES
 
-  Replit (2020 - current) Designer & Developer
+  Replit (2020 - 2024) Designer & Developer
     - main developer of Kaboom, a JavaScript game programming framework
     - front-end development (and sometimes design) for the Replit web app
 
@@ -38,4 +39,4 @@ PROJECTS
   dirty
     https://github.com/slmjkdbtl/dirty
     personal single-header C libraries, including software renderer, scripting
-    language etc
+    language, cross-platform windowing / audio etc

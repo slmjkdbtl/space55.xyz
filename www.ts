@@ -1247,13 +1247,19 @@ ${genWhereSQL(where, vars)}
 
 }
 
-export function trydo<T>(action: () => T, def: T) {
+export const trydo = overload2(<T>(action: () => T, def: T) => {
 	try {
 		return action()
 	} catch {
 		return def
 	}
-}
+}, <T>(action: () => T) => {
+	try {
+		return action()
+	} catch {
+		return null
+	}
+})
 
 export function isFileSync(path: string) {
 	return trydo(() => fs.statSync(path).isFile(), false)
