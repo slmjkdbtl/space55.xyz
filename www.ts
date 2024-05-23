@@ -239,49 +239,42 @@ export function createServer(opts: ServerOpts = {}): Server {
 
 			const onFinishEvents: Array<() => void> = []
 			const onErrorEvents: Array<(e: Error) => void> = []
-			const headers = new Headers()
+			let headers = new Headers()
 			let status = 200
 			let body: null | BodyInit = null
 
-			function getEtag() {
-				const ifNoneMatch = req.headers.get("If-None-Match")
-				if (!ifNoneMatch) return null
-				return ifNoneMatch
-					.replace(/^W\//, "")
-					.replace(/^"/, "")
-					.replace(/"$/, "")
-			}
-
-			function finish(res: Response) {
+			function send(b?: BodyInit | null, opt: ResOpt = {}) {
 				if (done) return
-				resolve(res)
+				body = b ?? null
+				headers = new Headers({
+					...headers.toJSON(),
+					...(opt.headers ?? {}),
+				})
+				status = opt.status ?? status
+				const bunRes = new Response(body, {
+					headers: headers,
+					status: status,
+				})
+				if (bunReq.method.toLowerCase() === "head") {
+					// TODO
+				}
+				resolve(bunRes)
 				done = true
 				onFinishEvents.forEach((f) => f())
 			}
 
-			function send(b?: BodyInit | null, opt: ResOpt = {}) {
-				body = b ?? null
-				finish(new Response(body, {
-					headers: {
-						...headers.toJSON(),
-						...(opt.headers ?? {}),
-					},
-					status: opt.status ?? status,
-				}))
-			}
-
 			function sendText(content: string, opt: ResOpt = {}) {
-				headers.append("Content-Type", "text/plain; charset=utf-8")
+				headers.set("Content-Type", "text/plain; charset=utf-8")
 				send(content, opt)
 			}
 
 			function sendHTML(content: string, opt: ResOpt = {}) {
-				headers.append("Content-Type", "text/html; charset=utf-8")
+				headers.set("Content-Type", "text/html; charset=utf-8")
 				send(content, opt)
 			}
 
 			function sendJSON(content: unknown, opt: ResOpt = {}) {
-				headers.append("Content-Type", "application/json; charset=utf-8")
+				headers.set("Content-Type", "application/json; charset=utf-8")
 				send(JSON.stringify(content), opt)
 			}
 
@@ -294,13 +287,37 @@ export function createServer(opts: ServerOpts = {}): Server {
 				if (mtimeServer === mtimeClient) {
 					return send(null, { status: 304 })
 				}
-				headers.append("Last-Modified", mtimeClient)
-				headers.append("Cache-Control", "no-cache")
-				send(file, opt)
+				// TODO: stream not working
+				// https://github.com/oven-sh/bun/blob/main/examples/http-file-extended.ts
+				// const range = bunReq.headers.get("Range")
+				// if (range) {
+					// let [start, end] = range
+						// .replace("bytes=", "")
+						// .split("-")
+						// .map(parseInt)
+					// start = start || 0
+					// end = end || file.size - 1
+					// if (start >= file.size || end >= file.size) {
+						// headers.set("Content-Range", `bytes */${file.size}`)
+						// return send(null, { status: 416 })
+					// }
+					// headers.set("Content-Range", `bytes ${start}-${end}/${file.size}`)
+					// headers.set("Content-Length", "" + (end - start + 1))
+					// headers.set("Accept-Ranges", "bytes")
+					// return send(file.slice(start, end), {
+						// ...opt,
+						// status: 206,
+					// })
+				// }
+				headers.set("Last-Modified", mtimeClient)
+				headers.set("Cache-Control", "no-cache")
+				return send(file, opt)
 			}
 
-			function redirect(url: string, status: number = 302) {
-				finish(Response.redirect(url, status))
+			function redirect(url: string, s: number = 302) {
+				headers.set("Location", url)
+				status = s
+				send(null)
 			}
 
 			const res: Res = {
@@ -455,7 +472,10 @@ export const route = overload2((pat: string, handler: Handler): Handler => {
 	}
 }, (method: string, pat: string, handler: Handler): Handler => {
 	return (ctx) => {
-		if (ctx.req.method.toLowerCase() === method.toLowerCase()) {
+		let rm = ctx.req.method.toLowerCase()
+		rm = rm === "head" ? "get" : rm
+		const m = method.toLowerCase()
+		if (rm === m) {
 			return route(pat, handler)(ctx)
 		} else {
 			ctx.next()
@@ -1010,7 +1030,7 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 		const needsTransform = boolKeys.length > 0
 
 		function transformItem(item: any): D {
-			if (!needsTransform) return item;
+			if (!needsTransform) return item
 			for (const k of boolKeys) {
 				item[k] = Boolean(item[k])
 			}
@@ -1018,7 +1038,7 @@ export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): D
 		}
 
 		function transformItems(items: any[]): any[] {
-			if (!needsTransform) return items;
+			if (!needsTransform) return items
 			return items.map(transformItem)
 		}
 

@@ -17,4 +17,9 @@ deploy:
 		--exclude data \
 		--exclude node_modules \
 		. $(DEPLOY_HOST):$(DEPLOY_DIR)
-	ssh -t $(DEPLOY_HOST) "sudo systemctl restart $(DEPLOY_SERVICE) && sudo systemctl status $(DEPLOY_SERVICE)"
+	ssh -t $(DEPLOY_HOST) "sudo systemctl restart $(DEPLOY_SERVICE)"
+
+.PHONY: status
+status:
+
+	ssh -t $(DEPLOY_HOST) "sudo systemctl status $(DEPLOY_SERVICE)"
