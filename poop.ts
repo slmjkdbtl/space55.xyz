@@ -49,7 +49,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	]),
 	h("body", {}, [
 		h("main", {}, [
-			h("div", { class: "vstack g64" }, entries.map(({ title, content }) => {
+			h("div", { class: "vstack g32" }, entries.map(({ title, content }) => {
 				return h("div", { class: "vstack g8" }, [
 					h("p", { class: "title" }, title),
 					h("p", { class: "content" }, content),
