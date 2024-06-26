@@ -7,7 +7,7 @@ import {
 import index from "./index"
 import poop from "./poop"
 import days from "./days"
-import work from "./work"
+import resume from "./resume"
 
 const server = createServer()
 console.log(`server starting at ${server.url.toString()}`)
@@ -22,7 +22,8 @@ server.use(dir("/files", "files"))
 server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
-server.use(route("GET", "/work", ({ res }) => res.sendHTML(work)))
+server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
+server.use(route("GET", "/portfolio", ({ res }) => res.sendHTML(resume)))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), 303)))
 
 server.error(({ req, res }, err) => {

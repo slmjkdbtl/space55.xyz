@@ -29,7 +29,7 @@ for (const year of await fs.readdir(DIR)) {
 					book[year][month][date] = content
 					list.push({
 						date: new Date(`${year}-${month}-${date}`),
-						content: content,
+						content: content.trim(),
 					})
 				}
 			}

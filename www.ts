@@ -1382,6 +1382,7 @@ export function h(
 ) {
 
 	let html = `<${tag}`
+	const nl = ""
 
 	for (const k in attrs) {
 		let v = attrs[k]
@@ -1404,7 +1405,7 @@ export function h(
 		}
 	}
 
-	html += ">\n"
+	html += ">" + nl
 
 	if (typeof(children) === "string" || typeof(children) === "number") {
 		html += children
@@ -1420,7 +1421,7 @@ export function h(
 	}
 
 	if (children !== undefined && children !== null) {
-		html += `</${tag}>\n`
+		html += `</${tag}>` + nl
 	}
 
 	return html
@@ -1577,6 +1578,7 @@ export function csslib(opt: CSSLibOpts = {}) {
 	// tailwind-like css helpers
 	const base: Record<string, Record<string, string | number>> = {
 		".flex": { "display": "flex" },
+		".grid": { "display": "grid" },
 		".vstack": { "display": "flex", "flex-direction": "column" },
 		".hstack": { "display": "flex", "flex-direction": "row" },
 		".vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
@@ -1631,6 +1633,16 @@ export function csslib(opt: CSSLibOpts = {}) {
 		base[`.r${s}`] = { "border-radius": `${s}px` }
 	}
 
+	const colors = [ "red", "green", "blue" ]
+
+	for (const c of colors) {
+		base[`.${c}`] = { "background-color": c }
+	}
+
+	for (let i = 2; i <= 8; i++) {
+		base[`.col-${i}`] = { "grid-template-columns": `repeat(${i}, 1fr)` }
+	}
+
 	const compileStyles = (sheet: Record<string, StyleSheet>) => {
 		let css = ""
 		for (const sel in sheet) {
@@ -1652,8 +1664,13 @@ export function csslib(opt: CSSLibOpts = {}) {
 
 }
 
+const jsCache: Record<string, string> = {}
+
 // TODO: better error handling?
 export async function js(p: string) {
+	if (jsCache[p]) {
+		return Promise.resolve(jsCache[p])
+	}
 	const file = Bun.file(p)
 	if (file.size === 0) return ""
 	const res = await Bun.build({
@@ -1667,6 +1684,9 @@ export async function js(p: string) {
 			throw new Error(`Expected 1 output, found ${res.outputs.length}`)
 		}
 		const code = await res.outputs[0].text()
+		if (!isDev) {
+			jsCache[p] = code
+		}
 		return code
 	} else {
 		console.log(res.logs[0])
