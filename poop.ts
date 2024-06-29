@@ -49,8 +49,8 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	]),
 	h("body", {}, [
 		h("main", {}, [
-			h("div", { class: "vstack g32" }, entries.map(({ title, content }) => {
-				return h("div", { class: "vstack g8" }, [
+			h("div", { class: "vstack g-32" }, entries.map(({ title, content }) => {
+				return h("div", { class: "vstack g-8" }, [
 					h("p", { class: "title" }, title),
 					h("p", { class: "content" }, content),
 					title === "在世界上所有诗后面加一句\"家人们谁懂\""

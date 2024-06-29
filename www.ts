@@ -1567,6 +1567,102 @@ function mapValues<A, B>(obj: Record<string, A>, mapFn: (v: A) => B) {
 	}, {})
 }
 
+export const c: Record<string, StyleSheet> = {
+	"flex": { "display": "flex" },
+	"grid": { "display": "grid" },
+	"vstack": { "display": "flex", "flex-direction": "column" },
+	"hstack": { "display": "flex", "flex-direction": "row" },
+	"vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
+	"hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
+	"stretch-x": { "width": "100%" },
+	"stretch-y": { "height": "100%" },
+	"bold": { "font-weight": "bold" },
+	"italic": { "font-style": "italic" },
+	"underline": { "font-decoration": "underline" },
+	"center": { "align-items": "center", "justify-content": "center" },
+	"align-start": { "align-items": "flex-start" },
+	"align-end": { "align-items": "flex-end" },
+	"align-center": { "align-items": "center" },
+	"align-stretch": { "align-items": "stretch" },
+	"align-baseline": { "align-items": "baseline" },
+	"justify-start": { "justify-content": "flex-start" },
+	"justify-end": { "justify-content": "flex-end" },
+	"justify-center": { "justify-content": "center" },
+	"justify-between": { "justify-content": "space-between" },
+	"justify-around": { "justify-content": "space-around" },
+	"justify-evenly": { "justify-content": "space-evenly" },
+	"align-self-start": { "align-self": "start" },
+	"align-self-end": { "align-self": "end" },
+	"align-self-center": { "align-self": "center" },
+	"align-self-stretch": { "align-self": "stretch" },
+	"align-self-baseline": { "align-self": "baseline" },
+	"justify-self-start": { "justify-self": "start" },
+	"justify-self-end": { "justify-self": "end" },
+	"justify-self-center": { "justify-self": "center" },
+	"justify-self-stretch": { "justify-self": "stretch" },
+	"text-center": { "text-align": "center" },
+	"text-left": { "text-align": "left" },
+	"text-right": { "text-align": "right" },
+	"wrap": { "flex-wrap": "wrap" },
+	"wrap-reverse": { "flex-wrap": "wrap-reverse" },
+	"nowrap": { "flex-wrap": "no-wrap" },
+}
+
+for (let i = 1; i <= 8; i++) {
+	c[`grow-${i}}`] = { "flex-grow": i + "" }
+	c[`shrink-${i}}`] = { "flex-shrink": i + "" }
+	c[`flex-${i}}`] = { "flex-grow": i + "", "flex-shrink": i + "" }
+}
+
+const spaces = [2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128]
+
+for (const s of spaces) {
+	c[`g-${s}`] = { "gap": `${s}px` }
+	c[`p-${s}`] = { "padding": `${s}px` }
+	c[`px-${s}`] = { "padding-left": `${s}px`, "padding-right": `${s}px` }
+	c[`py-${s}`] = { "padding-top": `${s}px`, "padding-bottom": `${s}px` }
+	c[`m-${s}`] = { "margin": `${s}px` }
+	c[`mx-${s}`] = { "margin-left": `${s}px`, "margin-right": `${s}px` }
+	c[`my-${s}`] = { "margin-top": `${s}px`, "margin-bottom": `${s}px` }
+	c[`f-${s}`] = { "font-size": `${s}px` }
+	c[`r-${s}`] = { "border-radius": `${s}px` }
+}
+
+const colors = [ "red", "green", "blue" ]
+
+for (const color of colors) {
+	c[`${color}`] = { "background-color": color }
+}
+
+for (let i = 2; i <= 8; i++) {
+	c[`col-${i}`] = { "grid-template-columns": `repeat(${i}, 1fr)` }
+}
+
+
+const autocol = (w: number, min: number, max: number) => ({
+	"grid-template_columns": `repeat(auto-fit, minmax(min(100% / ${min}, max(${w}, 100% / ${max})), 1fr))`
+})
+
+for (let i = 1; i <= 32; i++) {
+	const px = i * 40
+	c[`w-${px}`] = { "width": `${px}px` }
+	c[`h-${px}`] = { "height": `${px}px` }
+	c[`colw-${px}`] = { "grid-template-columns": `repeat(auto-fill, minmax(min(100%, ${px}px), 1fr))` }
+}
+
+export function cc(styles: string[] | string) {
+	if (typeof styles === "string") {
+		return cc(styles.split(" "))
+	}
+	let sheet: StyleSheet = {}
+	for (const s of styles) {
+		if (c[s]) {
+			Object.assign(sheet, c[s])
+		}
+	}
+	return sheet
+}
+
 export type CSSLibOpts = {
 	breakpoints?: Record<string, number>,
 }
@@ -1575,88 +1671,20 @@ export type CSSLibOpts = {
 // TODO: deal with pseudos like :hover
 export function csslib(opt: CSSLibOpts = {}) {
 
-	// tailwind-like css helpers
-	const base: Record<string, Record<string, string | number>> = {
-		".flex": { "display": "flex" },
-		".grid": { "display": "grid" },
-		".vstack": { "display": "flex", "flex-direction": "column" },
-		".hstack": { "display": "flex", "flex-direction": "row" },
-		".vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
-		".hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
-		".stretch-x": { "width": "100%" },
-		".stretch-y": { "height": "100%" },
-		".bold": { "font-weight": "bold" },
-		".italic": { "font-style": "italic" },
-		".underline": { "font-decoration": "underline" },
-		".center": { "align-items": "center", "justify-content": "center" },
-		".align-start": { "align-items": "flex-start" },
-		".align-end": { "align-items": "flex-end" },
-		".align-center": { "align-items": "center" },
-		".align-stretch": { "align-items": "stretch" },
-		".align-baseline": { "align-items": "baseline" },
-		".justify-start": { "justify-content": "flex-start" },
-		".justify-end": { "justify-content": "flex-end" },
-		".justify-center": { "justify-content": "center" },
-		".justify-between": { "justify-content": "space-between" },
-		".justify-around": { "justify-content": "space-around" },
-		".justify-evenly": { "justify-content": "space-evenly" },
-		".align-self-start": { "align-items": "flex-start" },
-		".align-self-end": { "align-self": "flex-end" },
-		".align-self-center": { "align-self": "center" },
-		".align-self-stretch": { "align-self": "stretch" },
-		".align-self-baseline": { "align-self": "baseline" },
-		".text-center": { "text-align": "center" },
-		".text-left": { "text-align": "left" },
-		".text-right": { "text-align": "right" },
-		".wrap": { "flex-wrap": "wrap" },
-		".wrap-reverse": { "flex-wrap": "wrap-reverse" },
-		".nowrap": { "flex-wrap": "no-wrap" },
-	}
-
-	for (let i = 1; i <= 8; i++) {
-		base[`.grow-${i}}`] = { "flex-grow": i }
-		base[`.shrink-${i}}`] = { "flex-shrink": i }
-		base[`.flex-${i}}`] = { "flex-grow": i, "flex-shrink": i }
-	}
-
-	const spaces = [2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128]
-
-	for (const s of spaces) {
-		base[`.g${s}`] = { "gap": `${s}px` }
-		base[`.p${s}`] = { "padding": `${s}px` }
-		base[`.px${s}`] = { "padding-left": `${s}px`, "padding-right": `${s}px` }
-		base[`.py${s}`] = { "padding-top": `${s}px`, "padding-bottom": `${s}px` }
-		base[`.m${s}`] = { "margin": `${s}px` }
-		base[`.mx${s}`] = { "margin-left": `${s}px`, "margin-right": `${s}px` }
-		base[`.my${s}`] = { "margin-top": `${s}px`, "margin-bottom": `${s}px` }
-		base[`.f${s}`] = { "font-size": `${s}px` }
-		base[`.r${s}`] = { "border-radius": `${s}px` }
-	}
-
-	const colors = [ "red", "green", "blue" ]
-
-	for (const c of colors) {
-		base[`.${c}`] = { "background-color": c }
-	}
-
-	for (let i = 2; i <= 8; i++) {
-		base[`.col-${i}`] = { "grid-template-columns": `repeat(${i}, 1fr)` }
-	}
-
 	const compileStyles = (sheet: Record<string, StyleSheet>) => {
 		let css = ""
 		for (const sel in sheet) {
-			css += `${sel} { ${style(sheet[sel])} } `
+			css += `.${sel} { ${style(sheet[sel])} } `
 		}
 		return css
 	}
 
-	let css = compileStyles(base)
+	let css = compileStyles(c)
 	const breakpoints = opt.breakpoints ?? {}
 
 	for (const bp in breakpoints) {
 		css += `@media (max-width: ${breakpoints[bp]}px) {`
-		css += compileStyles(mapKeys(base, (sel) => `.${bp}:${sel.substring(1)}`))
+		css += compileStyles(mapKeys(c, (sel) => `.${bp}:${sel.substring(1)}`))
 		css += `}`
 	}
 

@@ -72,7 +72,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	]),
 	h("body", {}, [
 		h("main", {}, [
-			h("div", { class: "vstack g16" }, list.map(({ date, content }) => {
+			h("div", { class: "vstack g-16" }, list.map(({ date, content }) => {
 				const year = date.getFullYear()
 				const month = date.getMonth() + 1
 				const day = date.getDate()
