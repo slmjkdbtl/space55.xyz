@@ -1428,6 +1428,12 @@ export function h(
 
 }
 
+export function dataurl(path: string) {
+	const file = Bun.file(path)
+	const base64 = fs.readFileSync(path, { encoding: "base64" })
+	return `data:${file.type};base64,${base64}`
+}
+
 export function style(sheet: StyleSheet) {
 	let style = ""
 	for (const prop in sheet) {
@@ -1570,12 +1576,19 @@ function mapValues<A, B>(obj: Record<string, A>, mapFn: (v: A) => B) {
 export const c: Record<string, StyleSheet> = {
 	"flex": { "display": "flex" },
 	"grid": { "display": "grid" },
+	"hidden": { "display": "none" },
+	"inline": { "display": "inline" },
+	"inline-block": { "display": "inline-block" },
+	"relative": { "position": "relative" },
+	"absolute": { "position": "absolute" },
+	"fixed": { "position": "fixed" },
+	"container": { "container-type": "inline-size" },
 	"vstack": { "display": "flex", "flex-direction": "column" },
 	"hstack": { "display": "flex", "flex-direction": "row" },
 	"vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
 	"hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
-	"stretch-x": { "width": "100%" },
-	"stretch-y": { "height": "100%" },
+	"fill-x": { "width": "100%" },
+	"fill-y": { "height": "100%" },
 	"bold": { "font-weight": "bold" },
 	"italic": { "font-style": "italic" },
 	"underline": { "font-decoration": "underline" },
@@ -1606,12 +1619,23 @@ export const c: Record<string, StyleSheet> = {
 	"wrap": { "flex-wrap": "wrap" },
 	"wrap-reverse": { "flex-wrap": "wrap-reverse" },
 	"nowrap": { "flex-wrap": "no-wrap" },
+	"rounded": { "border-radius": "50%" },
+	"center-abs": {
+		"position": "absolute",
+		"top": "50%",
+		"left": "50%",
+		"transform": "translate(-50%, -50%)",
+	},
 }
 
 for (let i = 1; i <= 8; i++) {
 	c[`grow-${i}}`] = { "flex-grow": i + "" }
 	c[`shrink-${i}}`] = { "flex-shrink": i + "" }
-	c[`flex-${i}}`] = { "flex-grow": i + "", "flex-shrink": i + "" }
+	c[`flex-${i}}`] = { "flex": i + "" }
+}
+
+for (let i = -8; i <= 8; i++) {
+	c[`z-${i}`] = { "z-index": `${i}` }
 }
 
 const spaces = [2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128]

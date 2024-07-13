@@ -36,7 +36,7 @@ const experiences = [
 		start: "2020.12",
 		end: "2024.06",
 		points: [
-			"Create <a href=\"https://kaboomjs.com\">Kaboom</a>, an open source JavaScript 2D game engine aimed to help beginners learn programming and game making",
+			"Created <a href=\"https://kaboomjs.com\">Kaboom</a>, an open source JavaScript 2D game engine aimed to help beginners learn programming and game making",
 			"Worked on design and engineering on Replit web app and the online code editor (typescript, react, figma)",
 		],
 	},
@@ -66,7 +66,7 @@ const sites = [
 	{ name: "DEOT", url: "https://deot.vercel.app/", img: "deot.jpg" },
 	{ name: "Locus Chen", url: "https://old.locuschen.com/", img: "locus.jpg" },
 	{ name: "tga", url: "https://space55.xyz/", img: "space55.jpg" },
-	{ name: "FFF Food Studio", url: "https://ffffoodstudio.com/", img: "fff.jpg" },
+	{ name: "FFF Food Studio", url: "http://64.23.143.14:4004/", img: "fff.jpg" },
 	{ name: "David Murray", url: "https://davidmurray.xyz/", img: "davidmurray.jpg" },
 ]
 
@@ -148,7 +148,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				...cc("vstack g-16")
 			},
 			".works": {
-				...cc("grid g-16 stretch-x colw-240")
+				...cc("grid g-16 fill-x colw-240")
 			},
 		})),
 	]),
@@ -159,17 +159,6 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				h("p", {}, "tga 吴曦远"),
 				h("a", { href: "mailto:tga@space55.xyz" }, "tga@space55.xyz"),
 				h("a", { href: "https://space55.xyz" }, "website"),
-			]),
-			h("div", { class: "section" }, [
-				h("h1", {}, "Skills"),
-				h("div", { class: "vstack g-16" }, skills.map((s) => {
-					return h("div", { class: "vstack g-16" }, [
-						h("h2", {}, s.name),
-						h("ul", {}, s.points.map((p) => {
-							return h("li", {}, p)
-						}))
-					])
-				})),
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Work Experience"),
@@ -193,12 +182,23 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				})),
 			]),
 			h("div", { class: "section" }, [
+				h("h1", {}, "Skills"),
+				h("div", { class: "vstack g-16" }, skills.map((s) => {
+					return h("div", { class: "vstack g-16" }, [
+						h("h2", {}, s.name),
+						h("ul", {}, s.points.map((p) => {
+							return h("li", {}, p)
+						}))
+					])
+				})),
+			]),
+			h("div", { class: "section" }, [
 				h("h1", {}, "Web Design & Development"),
-				h("p", { class: "desc" }, "I make websites for artists, musicians and creative studios. I do everything including design, illustration, development and deployment."),
+				h("p", { class: "desc" }, "I make websites for artists, designers, musicians and creative studios etc. I do everything including design, illustration, development and deployment."),
 				h("div", { class: "works" }, sites.map((w) => {
-					return h("div", { class: "vstack g-8 stretch-x" }, [
+					return h("div", { class: "vstack g-8 fill-x" }, [
 						h("a", { href: w.url }, w.name),
-						h("img", { class: "media stretch-x", src: `/static/sites/${w.img}` }),
+						h("img", { class: "media fill-x", src: `/static/sites/${w.img}` }),
 					])
 				})),
 			]),
@@ -210,10 +210,10 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 					".",
 				]),
 				h("div", { class: "works" }, games.map((g) => {
-					return h("div", { href: g.url, class: "vstack g-8 stretch-x" }, [
+					return h("div", { href: g.url, class: "vstack g-8 fill-x" }, [
 						h("a", { class: "name", href: g.url }, g.name),
 						h("p", { class: "desc", }, g.desc),
-						h("img", { class: "media stretch-x", src: `/static/games/${g.img}` }),
+						h("img", { class: "media fill-x", src: `/static/games/${g.img}` }),
 					])
 				})),
 			]),
@@ -225,10 +225,10 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 					".",
 				]),
 				h("div", { class: "works" }, code.map((c) => {
-					return h("div", { href: c.url, class: "vstack g-8 stretch-x" }, [
+					return h("div", { href: c.url, class: "vstack g-8 fill-x" }, [
 						h("a", { class: "name", href: c.url }, c.name),
 						h("p", { class: "desc", }, c.desc),
-						h("img", { class: "media stretch-x", src: `/static/code/${c.img}` }),
+						h("img", { class: "media fill-x", src: `/static/code/${c.img}` }),
 					])
 				})),
 			]),
