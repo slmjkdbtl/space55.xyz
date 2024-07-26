@@ -533,7 +533,7 @@ export function dir(route = "", root = ""): Handler {
 						},
 						"body": {
 							"padding": "16px",
-							"font-size": "16px",
+							"font-size": "24px",
 							"font-family": "Monospace",
 						},
 						"li": {
@@ -1374,6 +1374,28 @@ export type HTMLAttr =
 	| string[]
 	| Record<string, string>
 
+const inlineElements = new Set([
+	"p",
+	"b",
+	"i",
+	"em",
+	"strong",
+	"big",
+	"small",
+	"code",
+	"sub",
+	"sup",
+	"label",
+	"span",
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"title",
+])
+
 // html text builder
 export function h(
 	tag: string,
@@ -1382,7 +1404,7 @@ export function h(
 ) {
 
 	let html = `<${tag}`
-	const nl = ""
+	const nl = inlineElements.has(tag) ? "" : "\n"
 
 	for (const k in attrs) {
 		let v = attrs[k]
@@ -1658,7 +1680,7 @@ for (const color of colors) {
 	c[`${color}`] = { "background-color": color }
 }
 
-for (let i = 2; i <= 8; i++) {
+for (let i = 1; i <= 8; i++) {
 	c[`col-${i}`] = { "grid-template-columns": `repeat(${i}, 1fr)` }
 }
 
@@ -1667,8 +1689,8 @@ const autocol = (w: number, min: number, max: number) => ({
 	"grid-template_columns": `repeat(auto-fit, minmax(min(100% / ${min}, max(${w}, 100% / ${max})), 1fr))`
 })
 
-for (let i = 1; i <= 32; i++) {
-	const px = i * 40
+for (let i = 1; i <= 64; i++) {
+	const px = i * 20
 	c[`w-${px}`] = { "width": `${px}px` }
 	c[`h-${px}`] = { "height": `${px}px` }
 	c[`colw-${px}`] = { "grid-template-columns": `repeat(auto-fill, minmax(min(100%, ${px}px), 1fr))` }
@@ -1696,9 +1718,10 @@ export type CSSLibOpts = {
 export function csslib(opt: CSSLibOpts = {}) {
 
 	const compileStyles = (sheet: Record<string, StyleSheet>) => {
+		const nl = " "
 		let css = ""
 		for (const sel in sheet) {
-			css += `.${sel} { ${style(sheet[sel])} } `
+			css += `.${sel} { ${style(sheet[sel])} }${nl}`
 		}
 		return css
 	}
@@ -1803,7 +1826,6 @@ export function cron(rule: CronRule, action: () => void) {
 
 const alphaNumChars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-// TODO: filter bad words?
 export function randAlphaNum(len: number = 8) {
 	let str = ""
 	for (let i = 0; i < len; i++) {

@@ -198,47 +198,35 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				h("div", { class: "works" }, sites.map((w) => {
 					return h("div", { class: "vstack g-8 fill-x" }, [
 						h("a", { href: w.url }, w.name),
-						h("img", { class: "media fill-x", src: `/static/sites/${w.img}` }),
+						h("img", { class: "media fill-x", src: `/static/img/sites/${w.img}` }),
 					])
 				})),
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Games & Digital Toys"),
-				h("p", { class: "desc" }, [
-					"I make some small games and digital toys. You can find gameplay videos ",
-					h("a", { href: "https://vimeo.com/slmjkdbtl" }, "here"),
-					".",
-				]),
+				h("p", { class: "desc" }, "I make some small games and digital toys. You can find gameplay videos <a href=\"https://vimeo.com/slmjkdbtl\">here</a>."),
 				h("div", { class: "works" }, games.map((g) => {
 					return h("div", { href: g.url, class: "vstack g-8 fill-x" }, [
 						h("a", { class: "name", href: g.url }, g.name),
 						h("p", { class: "desc", }, g.desc),
-						h("img", { class: "media fill-x", src: `/static/games/${g.img}` }),
+						h("img", { class: "media fill-x", src: `/static/img/games/${g.img}` }),
 					])
 				})),
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Code"),
-				h("p", { class: "desc" }, [
-					"I'm most fluent in JavaScript / TypeScript now, also can write Lua, C, Rust etc. Check out my ",
-					h("a", { href: "https://github.com/slmjkdbtl/" }, "Github"),
-					".",
-				]),
+				h("p", { class: "desc" }, "I'm most fluent in JavaScript / TypeScript now, also can write Lua, C, Rust etc. Check out my <a href=\"https://github.com/slmjkdbtl/\">Github</a>."),
 				h("div", { class: "works" }, code.map((c) => {
 					return h("div", { href: c.url, class: "vstack g-8 fill-x" }, [
 						h("a", { class: "name", href: c.url }, c.name),
 						h("p", { class: "desc", }, c.desc),
-						h("img", { class: "media fill-x", src: `/static/code/${c.img}` }),
+						h("img", { class: "media fill-x", src: `/static/img/code/${c.img}` }),
 					])
 				})),
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Music"),
-				h("p", { class: "desc" }, [
-					"I play tenor saxophone, and some trumpet, flute and bass. Mostly in the jazz / free jazz / improv scene. You can find some videos of my performances ",
-					h("a", { href: "https://www.instagram.com/slmjkdbtl/reels/" }, "here"),
-					".",
-				]),
+				h("p", { class: "desc" }, "I play tenor saxophone, and some trumpet, flute and bass. Mostly in the jazz / free jazz / improv scene. You can find some videos of my performances <a href=\"https://space55.xyz/files/music\">here</a>."),
 			]),
 		]),
 	]),

@@ -4,63 +4,63 @@ const games = [
 	{
 		name: "好 GOOD",
 		year: "2017",
-		img: "/static/img/ui/games/good.png",
+		img: "/static/img/good.png",
 		desc: "a game about goodness",
 		link: "https://slmjkdbtl.itch.io/good"
 	},
 	{
 		name: "在哪里 wHERE'StIGA",
 		year: "2018",
-		img: "/static/img/ui/games/wherestiga.png",
+		img: "/static/img/wherestiga.png",
 		desc: "finding tiga",
 		link: "https://slmjkdbtl.itch.io/wherestiga"
 	},
 	{
 		name: "肮脏的手 DIRTY FINGER",
 		year: "2018",
-		img: "/static/img/ui/games/dirtyfinger.png",
+		img: "/static/img/dirtyfinger.png",
 		desc: "finger game",
 		link: "https://slmjkdbtl.itch.io/dirty-finger"
 	},
 	{
 		name: "大黄鸡的人生觉悟 Big Bird's Question About Life",
 		year: "2018",
-		img: "/static/img/ui/games/bigbird.png",
+		img: "/static/img/bigbird.png",
 		desc: "bir bird game",
 		link: "https://slmjkdbtl.itch.io/bigbirdsquestionaboutlife"
 	},
 	{
 		name: "粉红鱼鱼 Find the Pink Fish",
 		year: "2018",
-		img: "/static/img/ui/games/pfish.png",
+		img: "/static/img/pfish.png",
 		desc: "fish game",
 		link: "https://slmjkdbtl.itch.io/pfish"
 	},
 	{
 		name: "吃鱼 Eat Fish",
 		year: "2018",
-		img: "/static/img/ui/games/eatfish.png",
+		img: "/static/img/eatfish.png",
 		desc: "fish eating game",
 		link: "https://slmjkdbtl.itch.io/eat-fish"
 	},
 	{
 		name: "角膜 CONJUN",
 		year: "2017",
-		img: "/static/img/ui/games/conjun.png",
+		img: "/static/img/conjun.png",
 		desc: "squeeze game",
 		link: "https://slmjkdbtl.itch.io/conjun"
 	},
 	{
 		name: "高光 BL00000M",
 		year: "2017",
-		img: "/static/img/ui/games/bl00000m.png",
+		img: "/static/img/bl00000m.png",
 		desc: "flower game",
 		link: "https://slmjkdbtl.itch.io/bl00000m"
 	},
 	{
 		name: "丽萨 LISA",
 		year: "2018",
-		img: "/static/img/ui/games/lisa.png",
+		img: "/static/img/lisa.png",
 		desc: "tommy tearing apart game",
 		link: "https://slmjkdbtl.itch.io/lisa"
 	}
@@ -91,11 +91,11 @@ const styles = {
 		"padding": "0",
 		"box-sizing": "border-box",
 		"user-select": "none",
-		"cursor": "url(/static/img/ui/cursor1.png), default",
+		"cursor": "url(/static/img/cursor1.png), default",
 	},
 	".obj": {
 		":hover": {
-			"cursor": "url(/static/img/ui/cursor2.png), default",
+			"cursor": "url(/static/img/cursor2.png), default",
 		},
 	},
 	"a": {
@@ -110,7 +110,7 @@ const styles = {
 	"body": {
 		"width": "100%",
 		"background-color": "#000000",
-		"background": "url(/static/img/ui/space.jpg)",
+		"background": "url(/static/img/space.jpg)",
 		"text-align": "center",
 	},
 	".box": {
@@ -241,19 +241,19 @@ const styles = {
 	"@keyframes": {
 		"happy": {
 			"0%": {
-				"content": "url(/static/img/ui/flower1.png)",
+				"content": "url(/static/img/flower1.png)",
 			},
 			"25%": {
-				"content": "url(/static/img/ui/flower2.png)",
+				"content": "url(/static/img/flower2.png)",
 			},
 			"50%": {
-				"content": "url(/static/img/ui/flower3.png)",
+				"content": "url(/static/img/flower3.png)",
 			},
 			"75%": {
-				"content": "url(/static/img/ui/flower4.png)",
+				"content": "url(/static/img/flower4.png)",
 			},
 			"100%": {
-				"content": "url(/static/img/ui/flower1.png)",
+				"content": "url(/static/img/flower1.png)",
 			},
 		},
 	},
@@ -270,19 +270,19 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	]),
 	h("body", {}, [
 		h("div", { id: "dino", }, [
-			h("img", { id: "body", src: "/static/img/ui/dino.png", alt: "dino" }),
-			h("img", { id: "flower", class: "obj", src: "/static/img/ui/flower1.png", alt: "flower"  }),
+			h("img", { id: "body", src: "/static/img/dino.png", alt: "dino" }),
+			h("img", { id: "flower", class: "obj", src: "/static/img/flower1.png", alt: "flower"  }),
 		]),
-		h("img", { id: "title", src: "/static/img/ui/title.png", alt: "title", }),
+		h("img", { id: "title", src: "/static/img/title.png", alt: "title", }),
 		h("div", { class: "games wrapper", }, games.map((game) => h("a", { class: "box obj", href: game.link }, [
 			h("img", { class: "img obj", src: game.img, alt: game.name, }),
 		]))),
 		h("a", { href: "/randomlink", target: "_blank" }, [
-			h("img", { id: "randomlink", class: "obj", src: "/static/img/ui/randomlink.png", alt: "random link", }),
+			h("img", { id: "randomlink", class: "obj", src: "/static/img/randomlink.png", alt: "random link", }),
 		]),
-		h("img", { id: "elsewhere", src: "/static/img/ui/elsewhere.png", alt: "elsewhere", }),
+		h("img", { id: "elsewhere", src: "/static/img/elsewhere.png", alt: "elsewhere", }),
 		h("div", { class: "sites wrapper", }, sites.map((site) => h("a", { class: "box obj", href: site.link }, [
-			h("img", { class: "img obj", src: `/static/img/ui/${site.name}.png`, alt: site.name, })
+			h("img", { class: "img obj", src: `/static/img/${site.name}.png`, alt: site.name, })
 		]))),
 		h("script", {}, await js("client/index.ts")),
 	]),
