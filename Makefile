@@ -14,10 +14,16 @@ deploy:
 		-av --delete \
 		--exclude .DS_Store \
 		--exclude .git \
+		--exclude .env \
 		--exclude data \
 		--exclude node_modules \
 		. $(DEPLOY_HOST):$(DEPLOY_DIR)
 	ssh -t $(DEPLOY_HOST) "sudo systemctl restart $(DEPLOY_SERVICE)"
+
+.PHONY: links
+links:
+
+	bun run scripts/links.ts
 
 .PHONY: status
 status:

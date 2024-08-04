@@ -392,11 +392,11 @@ export function createServer(opts: ServerOpts = {}): Server {
 	let errHandler: ErrorHandler = ({ req, res, next }, err) => {
 		console.error(err)
 		res.status = 500
-		res.sendText(`internal server error`)
+		res.sendText(`500 internal server error`)
 	}
 	let notFoundHandler: NotFoundHandler = ({ res }) => {
 		res.status = 404
-		res.sendText("not found")
+		res.sendText("404 not found")
 	}
 
 	return {
@@ -1364,6 +1364,22 @@ export function getBearerAuth(req: Req): string | void {
 	return cred
 }
 
+export function classes(list: Array<string | Record<string, boolean>>) {
+	const c = []
+	for (const l of list) {
+		if (typeof l === "string") {
+			c.push(l)
+		} else if (typeof l === "object") {
+			for (const k in l) {
+				if (l[k]) {
+					c.push(k)
+				}
+			}
+		}
+	}
+	return c
+}
+
 export type HTMLChild = string | number | undefined | null
 export type HTMLChildren = HTMLChild | HTMLChild[]
 
@@ -1371,7 +1387,7 @@ export type HTMLAttr =
 	| boolean
 	| string
 	| number
-	| string[]
+	| Array<string | undefined>
 	| Record<string, string>
 
 const inlineElements = new Set([
@@ -1421,7 +1437,7 @@ export function h(
 				html += ` ${k}=${v}`
 				break
 			case "object":
-				const value = Array.isArray(v) ? v.join(" ") : style(v)
+				const value = Array.isArray(v) ? v.filter((p) => p).join(" ") : style(v)
 				html += ` ${k}="${Bun.escapeHTML(value)}"`
 				break
 		}
@@ -1609,6 +1625,7 @@ export const c: Record<string, StyleSheet> = {
 	"hstack": { "display": "flex", "flex-direction": "row" },
 	"vstack-reverse": { "display": "flex", "flex-direction": "column-reverse" },
 	"hstack-reverse": { "display": "flex", "flex-direction": "row-reverse" },
+	"fill": { "width": "100%", "height": "100%" },
 	"fill-x": { "width": "100%" },
 	"fill-y": { "height": "100%" },
 	"bold": { "font-weight": "bold" },
@@ -1642,6 +1659,11 @@ export const c: Record<string, StyleSheet> = {
 	"wrap-reverse": { "flex-wrap": "wrap-reverse" },
 	"nowrap": { "flex-wrap": "no-wrap" },
 	"rounded": { "border-radius": "50%" },
+	"fit-cover": { "object-fit": "cover" },
+	"fit-contain": { "object-fit": "contain" },
+	"fit-fill": { "object-fit": "fill" },
+	"overflow-hidden": { "overflow": "hidden" },
+	"overflow-scroll": { "overflow": "scroll" },
 	"center-abs": {
 		"position": "absolute",
 		"top": "50%",
@@ -1658,6 +1680,12 @@ for (let i = 1; i <= 8; i++) {
 
 for (let i = -8; i <= 8; i++) {
 	c[`z-${i}`] = { "z-index": `${i}` }
+}
+
+for (let i = 1; i <= 8; i++) {
+	c[`c-${i}`] = { "color": `var(--c-${i})` }
+	c[`bg-${i}`] = { "background": `var(--bg-${i})` }
+	c[`fs-${i}`] = { "font-size": `var(--fs-${i})` }
 }
 
 const spaces = [2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128]
@@ -1739,13 +1767,8 @@ export function csslib(opt: CSSLibOpts = {}) {
 
 }
 
-const jsCache: Record<string, string> = {}
-
 // TODO: better error handling?
 export async function js(p: string) {
-	if (jsCache[p]) {
-		return Promise.resolve(jsCache[p])
-	}
 	const file = Bun.file(p)
 	if (file.size === 0) return ""
 	const res = await Bun.build({
@@ -1758,11 +1781,7 @@ export async function js(p: string) {
 		if (res.outputs.length !== 1) {
 			throw new Error(`Expected 1 output, found ${res.outputs.length}`)
 		}
-		const code = await res.outputs[0].text()
-		if (!isDev) {
-			jsCache[p] = code
-		}
-		return code
+		return await res.outputs[0].text()
 	} else {
 		console.log(res.logs[0])
 		throw new Error("Failed to build js")

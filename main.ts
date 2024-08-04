@@ -25,13 +25,3 @@ server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
 server.use(route("GET", "/portfolio", ({ res }) => res.sendHTML(resume)))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), 303)))
-
-server.error(({ req, res }, err) => {
-	console.error(`Time: ${new Date()}`)
-	console.error(`Request: ${req.method} ${req.url}`)
-	console.error("")
-	console.error(err)
-	res.sendText("server error", { status: 500 })
-})
-
-server.notFound(({ res }) => res.sendText("404", { status: 404 }))
