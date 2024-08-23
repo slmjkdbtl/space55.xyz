@@ -4,8 +4,8 @@ if (typeof Bun === "undefined") {
 	throw new Error("Requires Bun")
 }
 
-import * as fs from "fs"
-import * as path from "path"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import type {
 	ServeOptions,
 	WebSocketServeOptions,
@@ -362,10 +362,8 @@ export function createServer(opts: ServerOpts = {}): Server {
 						const res = h(ctx)
 						if (isPromise(res)) {
 							res.catch((e) => {
-								if (errHandler) {
-									errHandler(ctx, e)
-									onErrorEvents.forEach((f) => f(e))
-								}
+								errHandler(ctx, e)
+								onErrorEvents.forEach((f) => f(e))
 							})
 						}
 					} catch (e) {
@@ -392,7 +390,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 	let errHandler: ErrorHandler = ({ req, res, next }, err) => {
 		console.error(err)
 		res.status = 500
-		res.sendText(`500 internal server error`)
+		res.sendText("500 internal server error")
 	}
 	let notFoundHandler: NotFoundHandler = ({ res }) => {
 		res.status = 404
@@ -1364,18 +1362,24 @@ export function getBearerAuth(req: Req): string | void {
 	return cred
 }
 
-export function classes(list: Array<string | Record<string, boolean>>) {
+export type ClassMap = Record<string, boolean>
+
+export function classes(list: ClassMap | Array<string | ClassMap>) {
 	const c = []
-	for (const l of list) {
-		if (typeof l === "string") {
-			c.push(l)
-		} else if (typeof l === "object") {
-			for (const k in l) {
-				if (l[k]) {
-					c.push(k)
+	if (Array.isArray(list)) {
+		for (const l of list) {
+			if (typeof l === "string") {
+				c.push(l)
+			} else if (typeof l === "object") {
+				for (const k in l) {
+					if (l[k]) {
+						c.push(k)
+					}
 				}
 			}
 		}
+	} else if (typeof list === "object") {
+		return classes([list])
 	}
 	return c
 }
@@ -1390,28 +1394,6 @@ export type HTMLAttr =
 	| Array<string | undefined>
 	| Record<string, string>
 
-const inlineElements = new Set([
-	"p",
-	"b",
-	"i",
-	"em",
-	"strong",
-	"big",
-	"small",
-	"code",
-	"sub",
-	"sup",
-	"label",
-	"span",
-	"h1",
-	"h2",
-	"h3",
-	"h4",
-	"h5",
-	"h6",
-	"title",
-])
-
 // html text builder
 export function h(
 	tag: string,
@@ -1420,7 +1402,7 @@ export function h(
 ) {
 
 	let html = `<${tag}`
-	const nl = inlineElements.has(tag) ? "" : "\n"
+	const nl = Array.isArray(children) ? "\n" : ""
 
 	for (const k in attrs) {
 		let v = attrs[k]
@@ -1445,21 +1427,21 @@ export function h(
 
 	html += ">" + nl
 
-	if (typeof(children) === "string" || typeof(children) === "number") {
-		html += children
-	} else if (Array.isArray(children)) {
+	if (Array.isArray(children)) {
 		for (const child of children) {
 			if (!child) continue
 			if (Array.isArray(child)) {
-				html += h("div", {}, child)
+				html += h("div", {}, child) + "\n"
 			} else {
-				html += child
+				html += child + "\n"
 			}
 		}
+	} else if (children) {
+		html += children
 	}
 
 	if (children !== undefined && children !== null) {
-		html += `</${tag}>` + nl
+		html += `</${tag}>`
 	}
 
 	return html
@@ -1664,6 +1646,10 @@ export const c: Record<string, StyleSheet> = {
 	"fit-fill": { "object-fit": "fill" },
 	"overflow-hidden": { "overflow": "hidden" },
 	"overflow-scroll": { "overflow": "scroll" },
+	"transparent": { "opacity": "0" },
+	"opaque": { "opacity": "1" },
+	"no-pointer": { "pointer-events": "none" },
+	"cursor-pointer": { "cursor": "pointer" },
 	"center-abs": {
 		"position": "absolute",
 		"top": "50%",
@@ -1672,10 +1658,14 @@ export const c: Record<string, StyleSheet> = {
 	},
 }
 
+for (let i = 0; i <= 10; i++) {
+	c[`o-${i}`] = { "opacity": i / 10 }
+}
+
 for (let i = 1; i <= 8; i++) {
-	c[`grow-${i}}`] = { "flex-grow": i + "" }
-	c[`shrink-${i}}`] = { "flex-shrink": i + "" }
-	c[`flex-${i}}`] = { "flex": i + "" }
+	c[`grow-${i}`] = { "flex-grow": i + "" }
+	c[`shrink-${i}`] = { "flex-shrink": i + "" }
+	c[`flex-${i}`] = { "flex": i + "" }
 }
 
 for (let i = -8; i <= 8; i++) {
@@ -1702,7 +1692,7 @@ for (const s of spaces) {
 	c[`r-${s}`] = { "border-radius": `${s}px` }
 }
 
-const colors = [ "red", "green", "blue" ]
+const colors = [ "red", "green", "blue", "black", "white" ]
 
 for (const color of colors) {
 	c[`${color}`] = { "background-color": color }
@@ -1749,7 +1739,7 @@ export function csslib(opt: CSSLibOpts = {}) {
 		const nl = " "
 		let css = ""
 		for (const sel in sheet) {
-			css += `.${sel} { ${style(sheet[sel])} }${nl}`
+			css += `.${sel} { ${style(sheet[sel])} }${nl}\n`
 		}
 		return css
 	}
@@ -1767,14 +1757,15 @@ export function csslib(opt: CSSLibOpts = {}) {
 
 }
 
+// TODO: save to fs so can be cached?
 // TODO: better error handling?
 export async function js(p: string) {
 	const file = Bun.file(p)
 	if (file.size === 0) return ""
 	const res = await Bun.build({
 		entrypoints: [p],
-		minify: false,
-		sourcemap: "none",
+		minify: !isDev,
+		sourcemap: isDev ? "inline" : "none",
 		target: "browser",
 	})
 	if (res.success) {
