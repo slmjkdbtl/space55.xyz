@@ -129,11 +129,11 @@ const styles = {
 		"width": "64%",
 		"margin": "0 auto",
 		"@media": {
-			"screen and (max-width: 960px)": {
+			"(max-width: 960px)": {
 				"width": "84%",
 				"height": "calc(84% * .75)",
 			},
-			"screen and (max-width: 640px)": {
+			"(max-width: 640px)": {
 				"width": "100%",
 				"height": "calc(96% * .75)",
 				"margin-top": "24px",
@@ -161,10 +161,10 @@ const styles = {
 		"margin": "32px auto",
 		"padding": "1px",
 		"@media": {
-			"screen and (max-width: 960px)": {
+			"(max-width: 960px)": {
 				"width": "48%",
 			},
-			"screen and (max-width: 640px)": {
+			"(max-width: 640px)": {
 				"width": "72%",
 			},
 		},
@@ -179,10 +179,10 @@ const styles = {
 			".box": {
 				"width": "33%",
 				"@media": {
-					"screen and (max-width: 960px)": {
+					"(max-width: 960px)": {
 						"width": "45%",
 					},
-					"screen and (max-width: 640px)": {
+					"(max-width: 640px)": {
 						"width": "100%",
 					},
 				},
@@ -192,14 +192,14 @@ const styles = {
 			".box": {
 				"width": "25%",
 				"@media": {
-					"screen and (max-width: 640px)": {
+					"(max-width: 640px)": {
 						"width": "100%",
 					},
 				},
 			},
 		},
 		"@media": {
-			"screen and (max-width: 640px)": {
+			"(max-width: 640px)": {
 				"margin-top": "-32px",
 			},
 		},
@@ -211,10 +211,10 @@ const styles = {
 		"margin": "0 auto",
 		"transition": "0.2s",
 		"@media": {
-			"screen and (max-width: 960px)": {
+			"(max-width: 960px)": {
 				"width": "64%",
 			},
-			"screen and (max-width: 640px)": {
+			"(max-width: 640px)": {
 				"width": "84%",
 			},
 		},
@@ -230,10 +230,10 @@ const styles = {
 		"margin-left": "8%",
 		"transition": "0.25s",
 		"@media": {
-			"screen and (max-width: 960px)": {
+			"(max-width: 960px)": {
 				"width": "64%",
 			},
-			"screen and (max-width: 640px)": {
+			"(max-width: 640px)": {
 				"width": "84%",
 			},
 		},

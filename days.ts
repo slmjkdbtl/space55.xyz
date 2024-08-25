@@ -1,6 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { h, css, csslib } from "./www"
+import { h, css, csslib, cc } from "./www"
 
 type Book = {
 	[year: string]: {
@@ -43,70 +43,65 @@ for (const yearDir of await fs.readdir(DIR, { withFileTypes: true })) {
 
 list.sort((a, b) => a.date.getTime() - b.date.getTime())
 
-function dateDiff(a: Date, b: Date) {
-	return Math.abs(a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24)
-}
-
 const firstDate = list[0].date
 const lastDate = list[list.length - 1].date
 
-class Date2 extends Date {
-	constructor(...args: ConstructorParameters<typeof Date>) {
-		super(...args)
-		this.setMinutes(this.getMinutes() - this.getTimezoneOffset())
+function fixDate(d: Date) {
+	d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+	return d
+}
+
+function monthRange(start: Date, end: Date) {
+	const months = []
+	const startYear = start.getFullYear()
+	const endYear = end.getFullYear()
+	for (let y = startYear; y <= endYear; y++) {
+		const sm = y === startYear ? start.getMonth() : 0
+		const em = y === endYear ? end.getMonth() : 11
+		for (let m = sm; m <= em; m++) {
+			months.push([y, m])
+		}
 	}
+	return months
+}
+
+function dateRange(start: Date, end: Date) {
+	const days = []
+	let cur = new Date(start)
+	while (cur <= end) {
+		days.push(new Date(cur))
+		cur.setDate(cur.getDate() + 1)
+	}
+	return days
 }
 
 function month(year: number, month: number) {
-	const calStart = new Date2(year, month - 1)
-	const calEnd = new Date2(year, month)
+	const calStart = fixDate(new Date(year, month - 1))
+	const calEnd = fixDate(new Date(year, month))
 	calStart.setDate(calStart.getDate() - calStart.getDay() + 1)
 	calEnd.setDate(calEnd.getDate() - 1)
 	if (calEnd.getDay() > 0) {
 		calEnd.setDate(calEnd.getDate() + 7 - calEnd.getDay())
 	}
-	const rows = []
-	let curRow = []
-	let cur = new Date(calStart)
-	while (cur <= calEnd) {
-		curRow.push({
-			date: new Date(cur),
-		})
-		if (curRow.length >= 7) {
-			rows.push(curRow)
-			curRow = []
+	const days = dateRange(calStart, calEnd)
+	return h("div", { class: "cal" }, days.map((d) => {
+		if (d.getMonth() !== month - 1) {
+			return h("div", { class: "day empty" }, [])
 		}
-		cur.setDate(cur.getDate() + 1)
-	}
-	return h("table", {}, rows.map((r) => {
-		return h("tr", {}, r.map((d) => {
-			if (d.date.getMonth() !== month - 1) {
-				return h("td", {}, [])
-			}
-			const isToday = new Date().toDateString() === d.date.toDateString()
-			const yearStr = d.date.getFullYear().toString().padStart(4, "0")
-			const monthStr = (d.date.getMonth() + 1).toString().padStart(2, "0")
-			const dayStr = d.date.getDate().toString().padStart(2, "0")
-			const diary = book[yearStr]?.[monthStr]?.[dayStr]
-			return h("td", {}, [
+		const yearStr = d.getFullYear().toString().padStart(4, "0")
+		const monthStr = (d.getMonth() + 1).toString().padStart(2, "0")
+		const dayStr = d.getDate().toString().padStart(2, "0")
+		const diary = book[yearStr]?.[monthStr]?.[dayStr]
+		if (diary) {
+			return h("div", { class: "day" }, [
 				h("p", { class: "date" }, `${dayStr}`),
 				h("p", { class: "diary" }, diary),
 			])
-		}))
-	}))
-}
-
-function range(a: number, b: number) {
-	return Array.from({ length: b - a + 1 }, (val, i) => a + i)
-}
-
-function cal(start: Date, end: Date) {
-	return h("div", { class: "vstack g-16" }, range(firstDate.getMonth(), lastDate.getMonth()).map((m) => {
-		return h("div", { class: "vstack g-8" }, [
-			h("p", { class: "month" }, m + 1),
-			// TODO
-			month(2024, m + 1),
-		])
+		} else {
+			return h("div", { class: "day empty" }, [
+				h("p", { class: "date" }, `${dayStr}`),
+			])
+		}
 	}))
 }
 
@@ -125,37 +120,51 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			},
 			"body": {
 				"padding": "24px",
+				"background": "url(/static/img/sky.jpg)",
+				"background-size": "1200px",
+				"font-family": "monospace",
 			},
 			"main": {
 				"max-width": "960px",
 				"width": "100%",
 				"margin": "0 auto",
+				"@media": {
+					"(max-width: 640px)": {
+						"max-width": "240px",
+					},
+				},
 			},
 			"p": {
 				"white-space": "pre-wrap",
 				"font-size": "16px",
 			},
-			"table": {
-				"border-collapse": "collapse",
-				"width": "100%",
+			".cal": {
+				"gap": "1px",
+				...cc("grid col-7"),
+				"@media": {
+					"(max-width: 640px)": {
+						...cc("col-1"),
+					},
+				},
 			},
-			"table, th, td": {
-				"border": "1px dashed rgba(0, 0, 0, 0.2)",
+			".day": {
+				...cc("vstack g-4 p-8"),
+				"outline": "1px dashed black",
+				"min-height": "120px",
 			},
-			"th, td": {
-				"padding": "8px",
-				"vertical-align": "top",
-				"max-width": "0",
-				"max-height": "0",
-				"height": "160px",
-				"display": "table-cell",
+			".empty": {
+				"@media": {
+					"(max-width: 640px)": {
+						"display": "none",
+					},
+				},
 			},
 			".month": {
 				"font-weight": "bold",
 			},
 			".date": {
-				"color": "#999999",
 				"font-size": "10px",
+				"font-weight": "bold",
 			},
 			".diary": {
 				"font-size": "10px",
@@ -164,7 +173,15 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	]),
 	h("body", {}, [
 		h("main", {}, [
-			cal(firstDate, lastDate),
+			h("div", {
+				class: "vstack g-16",
+			}, monthRange(firstDate, lastDate).map(([y, m]) => {
+				const d = `${y}.${(m + 1).toString().padStart(2, "0")}`
+				return h("div", { class: "vstack g-8" }, [
+					h("p", { class: "month" }, d),
+					month(y, m + 1),
+				])
+			}))
 		]),
 	]),
 ])

@@ -1362,24 +1362,18 @@ export function getBearerAuth(req: Req): string | void {
 	return cred
 }
 
-export type ClassMap = Record<string, boolean>
-
-export function classes(list: ClassMap | Array<string | ClassMap>) {
+export function classes(list: Array<string | Record<string, boolean>>) {
 	const c = []
-	if (Array.isArray(list)) {
-		for (const l of list) {
-			if (typeof l === "string") {
-				c.push(l)
-			} else if (typeof l === "object") {
-				for (const k in l) {
-					if (l[k]) {
-						c.push(k)
-					}
+	for (const l of list) {
+		if (typeof l === "string") {
+			c.push(l)
+		} else if (typeof l === "object") {
+			for (const k in l) {
+				if (l[k]) {
+					c.push(k)
 				}
 			}
 		}
-	} else if (typeof list === "object") {
-		return classes([list])
 	}
 	return c
 }
@@ -1757,14 +1751,12 @@ export function csslib(opt: CSSLibOpts = {}) {
 
 }
 
-// TODO: save to fs so can be cached?
 // TODO: better error handling?
 export async function js(p: string) {
 	const file = Bun.file(p)
 	if (file.size === 0) return ""
 	const res = await Bun.build({
 		entrypoints: [p],
-		minify: !isDev,
 		sourcemap: isDev ? "inline" : "none",
 		target: "browser",
 	})

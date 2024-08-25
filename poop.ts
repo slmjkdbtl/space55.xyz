@@ -26,7 +26,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				"padding": "0",
 			},
 			"body": {
-				"padding": "24px",
+				"padding": "16px",
 			},
 			"main": {
 				"max-width": "480px",
@@ -39,7 +39,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			},
 			".title": {
 				"font-weight": "bold",
-				"color": "tomato",
+				"color": "blue",
 			},
 			"button": {
 				"width": "fit-content",
@@ -48,7 +48,8 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 		})),
 	]),
 	h("body", {}, [
-		h("main", {}, [
+		h("main", { class: "vstack g-64" }, [
+			h("img", { src: "/static/img/smile.gif", class: "w-20" }),
 			h("div", { class: "vstack g-32" }, entries.map(({ title, content }) => {
 				return h("div", { class: "vstack g-8" }, [
 					h("p", { class: "title" }, title),
