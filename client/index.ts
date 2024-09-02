@@ -7,8 +7,10 @@ for (let i = 1; i <= 4; i++) {
 	preload(`/static/img/drawings/flower${i}.png`)
 }
 
-const flower: HTMLImageElement | null = document.querySelector("#flower")
+const flower = document.querySelector<HTMLImageElement>("#flower")
 
 if (flower) {
-	flower.onclick = (() => flower.classList.add("happy"))
+	flower.addEventListener("click", () => {
+		flower.classList.add("happy")
+	})
 }

@@ -75,14 +75,16 @@ function dateRange(start: Date, end: Date) {
 	return days
 }
 
+function getDay(d: Date) {
+	return d.getDay() === 0 ? 7 : d.getDay()
+}
+
 function month(year: number, month: number) {
 	const calStart = fixDate(new Date(year, month - 1))
 	const calEnd = fixDate(new Date(year, month))
-	calStart.setDate(calStart.getDate() - calStart.getDay() + 1)
+	calStart.setDate(calStart.getDate() - getDay(calStart) + 1)
 	calEnd.setDate(calEnd.getDate() - 1)
-	if (calEnd.getDay() > 0) {
-		calEnd.setDate(calEnd.getDate() + 7 - calEnd.getDay())
-	}
+	calEnd.setDate(calEnd.getDate() + 7 - getDay(calEnd))
 	const days = dateRange(calStart, calEnd)
 	return h("div", { class: "cal" }, days.map((d) => {
 		if (d.getMonth() !== month - 1) {

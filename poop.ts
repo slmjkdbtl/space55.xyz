@@ -27,11 +27,12 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			},
 			"body": {
 				"padding": "16px",
+				"font-family": "monospace",
 			},
 			"main": {
 				"max-width": "480px",
 				"width": "100%",
-				"margin": "0 auto",
+				"margin": "32px auto",
 			},
 			"p": {
 				"white-space": "pre-wrap",
@@ -39,7 +40,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			},
 			".title": {
 				"font-weight": "bold",
-				"color": "blue",
+				"color": "#0000ff",
 			},
 			"button": {
 				"width": "fit-content",
