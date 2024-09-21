@@ -1,6 +1,7 @@
 DEPLOY_HOST = tga@space55.xyz
 DEPLOY_DIR = /home/tga/space55.xyz
 DEPLOY_SERVICE = space55.xyz
+FONT_TARGETS = static/fonts/NotoSerifJP.woff2
 
 .PHONY: dev
 dev:
@@ -33,3 +34,16 @@ check:
 .PHONY: links
 links:
 	bun run scripts/links.ts
+
+.PHONY: fonts
+fonts: $(FONT_TARGETS)
+
+static/fonts/NotoSerifJP.woff2: static/fonts/NotoSerifJP.ttf jap.ts
+	pyftsubset "$<" \
+		--text-file="$(wordlist 2,64,$^)" \
+		--flavor=woff2 \
+		--output-file="$@"
+
+.PHONY: clean
+clean:
+	rm $(FONT_TARGETS)
