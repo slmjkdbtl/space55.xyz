@@ -10,7 +10,6 @@ import index from "./index"
 import poop from "./poop"
 import days from "./days"
 import resume from "./resume"
-import jap from "./jap"
 
 // TODO: live reload
 
@@ -33,5 +32,4 @@ server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
 server.use(route("GET", "/portfolio", ({ res }) => res.sendHTML(resume)))
-server.use(route("GET", "/jap", ({ res }) => res.sendHTML(jap)))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), 303)))
