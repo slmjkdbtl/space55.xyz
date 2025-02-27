@@ -494,74 +494,196 @@ export function files(route = "", root = ""): Handler {
 	}
 }
 
-export function dir(route = "", root = ""): Handler {
-	return ({ req, res, next }) => {
+export function filebrowser(route = "", root = ""): Handler {
+	return async ({ req, res, next }) => {
 		route = trimSlashes(route)
-		const pathname = trimSlashes(decodeURI(req.url.pathname))
+		const pathname = trimSlashes(decodeURIComponent(req.url.pathname))
 		if (!pathname.startsWith(route)) return next()
-		const baseDir = "./" + trimSlashes(root)
 		const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
-		const p = path.join(baseDir, relativeURLPath)
-		if (isFileSync(p)) {
-			return res.sendFile(p)
-		} else if (isDirSync(p)) {
-			const entries = fs.readdirSync(p)
-				.filter((entry) => !entry.startsWith("."))
-				.sort((a, b) => a > b ? -1 : 1)
-				.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
-			const files = []
-			const dirs = []
-			for (const entry of entries) {
-				const pp = path.join(p, entry)
-				if (isDirSync(pp)) {
-					dirs.push(entry)
-				} else if (isFileSync(pp)) {
-					files.push(entry)
+		const p = path.join("./" + trimSlashes(root), relativeURLPath)
+		if (isFileSync(p)) return res.sendFile(p)
+		if (!isDirSync(p)) return next()
+		let el = null
+		const requestedFile = req.url.searchParams.get("file")
+		if (requestedFile) {
+			const file = Bun.file(path.join(p, requestedFile))
+			if (await file.exists()) {
+				const ty = file.type
+				const url = `/${p}/${encodeURIComponent(requestedFile)}`
+				if (ty.startsWith("text/html")) {
+					el = h("iframe", {
+						src: url,
+					})
+				} else if (ty.startsWith("text/")) {
+					const content = await file.text()
+					el = h("p", {}, content)
+				} else if (ty.startsWith("image/")) {
+					const buf = await file.arrayBuffer()
+					const base64 = Buffer.from(buf).toString("base64")
+					el = h("img", {
+						src: `data:${ty};base64,${base64}`,
+					})
+				} else if (ty.startsWith("video/")) {
+					el = h("video", {
+						src: url,
+						controls: true,
+					})
+				} else if (ty.includes("pdf")) {
+					const buf = await file.arrayBuffer()
+					const base64 = Buffer.from(buf).toString("base64")
+					el = h("embed", {
+						src: `data:${ty};base64,${base64}`,
+						type: ty,
+					}, "")
+				} else {
+					el = h("p", {}, `file type not supported: ${ty}`)
 				}
+			} else {
+				el = h("p", {}, `file not found: ${requestedFile}`)
 			}
-			const isRoot = relativeURLPath === ""
-			return res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
-				h("head", {}, [
-					h("title", {}, decodeURI(req.url.pathname)),
-					h("style", {}, css({
-						"*": {
-							"margin": "0",
-							"padding": "0",
-							"box-sizing": "border-box",
-						},
-						"body": {
-							"padding": "16px",
-							"font-size": "24px",
-							"font-family": "Monospace",
-						},
-						"li": {
-							"list-style": "none",
-						},
-						"a": {
-							"color": "blue",
-							"text-decoration": "none",
-							":hover": {
-								"background": "blue",
-								"color": "white",
+		}
+		const dir = p
+		const entries = fs.readdirSync(dir)
+			.filter((entry) => !entry.startsWith("."))
+			.sort((a, b) => a > b ? -1 : 1)
+			.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
+		const files = []
+		const dirs = []
+		for (const entry of entries) {
+			const pp = path.join(dir, entry)
+			if (isDirSync(pp)) {
+				dirs.push(entry)
+			} else if (isFileSync(pp)) {
+				files.push(entry)
+			}
+		}
+		const isRoot = relativeURLPath === ""
+		return res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
+			h("head", {}, [
+				h("title", {}, decodeURI(req.url.pathname)),
+				h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
+				h("style", {}, css({
+					"*": {
+						"margin": "0",
+						"padding": "0",
+						"box-sizing": "border-box",
+					},
+					"html": {
+						"width": "100%",
+						"height": "100%",
+					},
+					"body": {
+						"width": "100%",
+						"height": "100%",
+						"padding": "8px",
+						"font-size": "16px",
+						"font-family": "Monospace",
+						"display": "grid",
+						"grid-template-columns": "1fr 3fr",
+						"gap": "8px",
+						"@media": {
+							"(max-width: 640px)": {
+								"grid-template-columns": "1fr",
+								"grid-template-rows": "1fr 2fr",
 							},
 						},
-					})),
-				]),
-				h("body", {}, [
-					h("ul", {}, [
-						...(isRoot ? [] : [
-							h("a", { href: `/${parentPath(pathname)}`, }, ".."),
-						]),
-						...dirs.map((dir) => h("li", {}, [
-							h("a", { href: `/${pathname}/${dir}`, }, dir + "/"),
-						])),
-						...files.map((file) => h("li", {}, [
-							h("a", { href: `/${pathname}/${file}`, }, file),
-						])),
+					},
+					"#tree": {
+						"border-right": "dotted 2px #ccc",
+						"@media": {
+							"(max-width: 640px)": {
+								"border-bottom": "dotted 2px #ccc"
+							},
+						},
+					},
+					".box": {
+						"padding": "8px",
+						"overflow": "scroll",
+						"height": "100%",
+					},
+					"li": {
+						"list-style": "none",
+					},
+					"a": {
+						"color": "blue",
+						"text-decoration": "none",
+						":hover": {
+							"background": "blue",
+							"color": "white",
+						},
+						"&.selected": {
+							"background": "blue",
+							"color": "white",
+						},
+					},
+					"p": {
+						"white-space": "pre-wrap",
+						"overflow": "scroll",
+						"height": "100%",
+					},
+					"img": {
+						"max-width": "calc(100% - 4px)",
+						"max-height": "calc(100% - 4px)",
+					},
+					"video": {
+						"max-width": "calc(100% - 4px)",
+						"max-height": "calc(100% - 4px)",
+					},
+					"iframe": {
+						"border": "none",
+						"outline": "none",
+						"width": "calc(100% - 4px)",
+						"height": "calc(100% - 4px)",
+					},
+					"embed": {
+						"border": "none",
+						"outline": "none",
+						"width": "calc(100% - 4px)",
+						"height": "calc(100% - 4px)",
+					},
+				})),
+			]),
+			h("body", {}, [
+				h("ul", { id: "tree", class: "box" }, [
+					...(isRoot ? [] : [
+						h("a", { href: `/${parentPath(dir)}`, }, ".."),
 					]),
+					...dirs.map((d) => h("li", {}, [
+						h("a", { href: `/${dir}/${d}`, }, d + "/"),
+					])),
+					...files.map((file) => h("li", {}, [
+						h("a", {
+							href: `/${dir}?file=${encodeURIComponent(file)}`,
+							class: classes([{
+								"selected": file === requestedFile,
+							}]),
+						}, file),
+					])),
 				]),
-			]))
-		}
+				h("div", { class: "box" }, [
+					el,
+				]),
+				h("script", {}, `
+const tree = document.querySelector("#tree")
+const url = new URL(location.href)
+
+window.addEventListener("load", () => {
+  const treePos = localStorage.getItem("treePos")
+  if (!treePos) return
+  const [pathname, scrollTop] = treePos.split(":")
+  if (pathname !== url.pathname) {
+    localStorage.removeItem("treePos")
+    return
+  }
+  tree.scrollTop = scrollTop
+})
+
+tree.addEventListener("scroll", () => {
+  localStorage.setItem("treePos", url.pathname + ":" + tree.scrollTop)
+})
+				`),
+			]),
+		]))
 	}
 }
 

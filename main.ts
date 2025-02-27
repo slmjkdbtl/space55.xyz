@@ -3,19 +3,13 @@ import {
 	isDev,
 	createServer,
 	files,
-	dir,
+	filebrowser,
 	route,
 } from "./www"
 import index from "./index"
 import poop from "./poop"
 import days from "./days"
 import resume from "./resume"
-
-// TODO: live reload
-
-if (isDev) {
-	await $`make fonts`
-}
 
 const server = createServer()
 console.log(`server starting at ${server.url.toString()}`)
@@ -26,7 +20,7 @@ const rand = (a: number, b: number) => Math.floor(a + Math.random() * (b - a))
 const randItem = <D>(arr: D[]) => arr[rand(0, arr.length)]
 
 server.use(files("/static", "static"))
-server.use(dir("/files", "files"))
+server.use(filebrowser("/files", "files"))
 server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
