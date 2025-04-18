@@ -1,6 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { h, css, csslib, cc } from "./www"
+import { h, css, csslib, cc, js } from "./www"
 
 type Book = {
 	[year: string]: {

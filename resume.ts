@@ -215,7 +215,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Code"),
-				h("p", { class: "desc" }, "I'm most fluent in JavaScript / TypeScript now, also can write Lua, C, Rust etc. Check out my <a href=\"https://github.com/slmjkdbtl/\">Github</a>."),
+				h("p", { class: "desc" }, "I'm most fluent in JavaScript / TypeScript, also have written a lot of Lua, C, Rust in personal projects. Check out my <a href=\"https://github.com/slmjkdbtl/\">Github</a>."),
 				h("div", { class: "works" }, code.map((c) => {
 					return h("div", { href: c.url, class: "vstack g-8 fill-x" }, [
 						h("a", { class: "name", href: c.url }, c.name),
@@ -226,7 +226,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Music"),
-				h("p", { class: "desc" }, "I play tenor saxophone, and some trumpet, flute and bass. Mostly in the jazz / free jazz / improv scene. You can find some videos of my performances <a href=\"https://space55.xyz/files/music\">here</a>."),
+				h("p", { class: "desc" }, "I play tenor saxophone, and some trumpet, flute and bass. Mostly in the free jazz / improv scene. You can find some videos of my performances <a href=\"/files/music\">here</a>."),
 			]),
 		]),
 	]),
