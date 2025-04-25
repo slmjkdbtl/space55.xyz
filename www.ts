@@ -503,7 +503,7 @@ export function filebrowser(route = "", root = ""): Handler {
 		const p = path.join("./" + trimSlashes(root), relativeURLPath)
 		if (isFileSync(p)) return res.sendFile(p)
 		if (!isDirSync(p)) return next()
-		let el = null
+		let contentEl = null
 		const requestedFile = req.url.searchParams.get("file")
 		if (requestedFile) {
 			const file = Bun.file(path.join(p, requestedFile))
@@ -511,35 +511,35 @@ export function filebrowser(route = "", root = ""): Handler {
 				const ty = file.type
 				const url = `/${p}/${encodeURIComponent(requestedFile)}`
 				if (ty.startsWith("text/html")) {
-					el = h("iframe", {
+					contentEl = h("iframe", {
 						src: url,
 					})
 				} else if (ty.startsWith("text/")) {
 					const content = await file.text()
-					el = h("p", {}, content)
+					contentEl = h("p", {}, content)
 				} else if (ty.startsWith("image/")) {
 					const buf = await file.arrayBuffer()
 					const base64 = Buffer.from(buf).toString("base64")
-					el = h("img", {
+					contentEl = h("img", {
 						src: `data:${ty};base64,${base64}`,
 					})
 				} else if (ty.startsWith("video/")) {
-					el = h("video", {
+					contentEl = h("video", {
 						src: url,
 						controls: true,
 					})
 				} else if (ty.includes("pdf")) {
 					const buf = await file.arrayBuffer()
 					const base64 = Buffer.from(buf).toString("base64")
-					el = h("embed", {
+					contentEl = h("embed", {
 						src: `data:${ty};base64,${base64}`,
 						type: ty,
 					}, "")
 				} else {
-					el = h("p", {}, `file type not supported: ${ty}`)
+					contentEl = h("p", {}, `file type not supported: ${ty}`)
 				}
 			} else {
-				el = h("p", {}, `file not found: ${requestedFile}`)
+				contentEl = h("p", {}, `file not found: ${requestedFile}`)
 			}
 		}
 		const dir = p
@@ -661,22 +661,22 @@ export function filebrowser(route = "", root = ""): Handler {
 					])),
 				]),
 				h("div", { class: "box" }, [
-					el,
+					contentEl,
 				]),
 				h("script", {}, `
+const TREE_POS_KEY = "treePos"
 const tree = document.querySelector("#tree")
 const url = new URL(location.href)
+const treePos = localStorage.getItem(TREE_POS_KEY)
 
-window.addEventListener("load", () => {
-  const treePos = localStorage.getItem("treePos")
-  if (!treePos) return
+if (treePos) {
   const [pathname, scrollTop] = treePos.split(":")
-  if (pathname !== url.pathname) {
-    localStorage.removeItem("treePos")
-    return
+  if (pathname === url.pathname) {
+    tree.scrollTop = scrollTop
+  } else {
+    localStorage.removeItem(TREE_POS_KEY)
   }
-  tree.scrollTop = scrollTop
-})
+}
 
 tree.addEventListener("scroll", () => {
   localStorage.setItem("treePos", url.pathname + ":" + tree.scrollTop)
