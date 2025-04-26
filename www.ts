@@ -503,45 +503,6 @@ export function filebrowser(route = "", root = ""): Handler {
 		const p = path.join("./" + trimSlashes(root), relativeURLPath)
 		if (isFileSync(p)) return res.sendFile(p)
 		if (!isDirSync(p)) return next()
-		let contentEl = null
-		const requestedFile = req.url.searchParams.get("file")
-		if (requestedFile) {
-			const file = Bun.file(path.join(p, requestedFile))
-			if (await file.exists()) {
-				const ty = file.type
-				const url = `/${p}/${encodeURIComponent(requestedFile)}`
-				if (ty.startsWith("text/html")) {
-					contentEl = h("iframe", {
-						src: url,
-					})
-				} else if (ty.startsWith("text/")) {
-					const content = await file.text()
-					contentEl = h("p", {}, content)
-				} else if (ty.startsWith("image/")) {
-					const buf = await file.arrayBuffer()
-					const base64 = Buffer.from(buf).toString("base64")
-					contentEl = h("img", {
-						src: `data:${ty};base64,${base64}`,
-					})
-				} else if (ty.startsWith("video/")) {
-					contentEl = h("video", {
-						src: url,
-						controls: true,
-					})
-				} else if (ty.includes("pdf")) {
-					const buf = await file.arrayBuffer()
-					const base64 = Buffer.from(buf).toString("base64")
-					contentEl = h("embed", {
-						src: `data:${ty};base64,${base64}`,
-						type: ty,
-					}, "")
-				} else {
-					contentEl = h("p", {}, `file type not supported: ${ty}`)
-				}
-			} else {
-				contentEl = h("p", {}, `file not found: ${requestedFile}`)
-			}
-		}
 		const dir = p
 		const entries = fs.readdirSync(dir)
 			.filter((entry) => !entry.startsWith("."))
@@ -607,6 +568,7 @@ export function filebrowser(route = "", root = ""): Handler {
 					"a": {
 						"color": "blue",
 						"text-decoration": "none",
+						"cursor": "pointer",
 						":hover": {
 							"background": "blue",
 							"color": "white",
@@ -652,35 +614,68 @@ export function filebrowser(route = "", root = ""): Handler {
 						h("a", { href: `/${dir}/${d}`, }, d + "/"),
 					])),
 					...files.map((file) => h("li", {}, [
-						h("a", {
-							href: `/${dir}?file=${encodeURIComponent(file)}`,
-							class: classes([{
-								"selected": file === requestedFile,
-							}]),
-						}, file),
+						h("a", { class: "entry" }, file),
 					])),
 				]),
-				h("div", { class: "box" }, [
-					contentEl,
-				]),
+				h("div", { id: "content", class: "box" }, []),
 				h("script", {}, `
-const TREE_POS_KEY = "treePos"
-const tree = document.querySelector("#tree")
-const url = new URL(location.href)
-const treePos = localStorage.getItem(TREE_POS_KEY)
+const entries = document.querySelectorAll(".entry")
+const content = document.querySelector("#content")
 
-if (treePos) {
-  const [pathname, scrollTop] = treePos.split(":")
-  if (pathname === url.pathname) {
-    tree.scrollTop = scrollTop
+async function updateContent(file) {
+  content.innerHTML = ""
+  const url = "/" + "${dir}" + "/" + encodeURIComponent(file)
+  const res = await fetch(url)
+  if (!res.ok) {
+    content.textContent = "file not found"
+    return
+  }
+  const ty = res.headers.get("Content-Type")
+  if (ty.startsWith("text/html")) {
+    const iframe = document.createElement("iframe")
+    iframe.src = url
+    content.append(iframe)
+  } else if (ty.startsWith("text/")) {
+    const p = document.createElement("p")
+    p.textContent = await res.text()
+    content.append(p)
+  } else if (ty.startsWith("image/")) {
+    const img = document.createElement("img")
+    img.src = url
+    content.append(img)
+  } else if (ty.startsWith("video/")) {
+    const video = document.createElement("video")
+    video.src = url
+    video.controls = true
+    content.append(video)
+  } else if (ty.includes("pdf")) {
+    const embed = document.createElement("embed")
+    embed.src = url
+    content.append(embed)
   } else {
-    localStorage.removeItem(TREE_POS_KEY)
+    content.textContent = "file type not supported"
   }
 }
 
-tree.addEventListener("scroll", () => {
-  localStorage.setItem("treePos", url.pathname + ":" + tree.scrollTop)
+for (const entry of entries) {
+  entry.addEventListener("click", () => {
+    for (const entry of entries) {
+      entry.classList.remove("selected")
+    }
+    entry.classList.add("selected")
+    const file = entry.textContent
+    updateContent(file)
+    history.pushState(null, "", "#" + file)
+  })
+}
+
+window.addEventListener("hashchange", () => {
+  updateContent(location.hash.substring(1))
 })
+
+if (location.hash) {
+  updateContent(location.hash.substring(1))
+}
 				`),
 			]),
 		]))
