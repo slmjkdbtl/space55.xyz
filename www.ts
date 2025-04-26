@@ -622,10 +622,40 @@ export function filebrowser(route = "", root = ""): Handler {
 const entries = document.querySelectorAll(".entry")
 const content = document.querySelector("#content")
 
+function isInView(el) {
+  const rect = el.getBoundingClientRect()
+  return (
+    rect.bottom > 0 &&
+    rect.right > 0 &&
+    rect.top < window.innerHeight &&
+    rect.left < window.innerWidth
+  )
+}
+
+function getHash() {
+  return decodeURIComponent(location.hash.substring(1))
+}
+
 async function updateContent(file) {
-  content.innerHTML = ""
+  for (const entry of entries) {
+    entry.classList.remove("selected")
+    if (entry.textContent === file) {
+      entry.classList.add("selected")
+      if (!isInView(entry)) {
+        entry.scrollIntoView()
+      }
+    }
+  }
+  content.textContent = ""
+  const anim = setInterval(() => {
+    let c = content.textContent.length
+    c = (c + 1) % 4
+    content.textContent = ".".repeat(c)
+  }, 100)
   const url = "/" + "${dir}" + "/" + encodeURIComponent(file)
   const res = await fetch(url)
+  clearInterval(anim)
+  content.innerHTML = ""
   if (!res.ok) {
     content.textContent = "file not found"
     return
@@ -659,10 +689,6 @@ async function updateContent(file) {
 
 for (const entry of entries) {
   entry.addEventListener("click", () => {
-    for (const entry of entries) {
-      entry.classList.remove("selected")
-    }
-    entry.classList.add("selected")
     const file = entry.textContent
     updateContent(file)
     history.pushState(null, "", "#" + file)
@@ -670,11 +696,11 @@ for (const entry of entries) {
 }
 
 window.addEventListener("hashchange", () => {
-  updateContent(location.hash.substring(1))
+  updateContent(getHash())
 })
 
 if (location.hash) {
-  updateContent(location.hash.substring(1))
+  updateContent(getHash())
 }
 				`),
 			]),
