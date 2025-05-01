@@ -637,9 +637,11 @@ function getHash() {
 }
 
 async function updateContent(file) {
+  let found = false
   for (const entry of entries) {
     entry.classList.remove("selected")
-    if (entry.textContent === file) {
+    if (!found && entry.textContent === file) {
+      found = true
       entry.classList.add("selected")
       if (!isInView(entry)) {
         entry.scrollIntoView()

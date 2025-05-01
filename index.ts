@@ -153,6 +153,13 @@ const styles = {
 				"animation": "happy 0.5s infinite",
 			},
 		},
+		"#eye": {
+			"position": "absolute",
+			"top": "30%",
+			"left": "35%",
+			"width": "0.5%",
+			"height": "auto",
+		},
 	},
 	"#title": {
 		"display": "block",
@@ -259,31 +266,34 @@ const styles = {
 	},
 }
 
-export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
-	h("head", {}, [
-		h("title", {}, "tga"),
-		h("meta", { charset: "utf-8", }),
-		h("meta", { name: "description", content: "tga's homepage", }),
-		h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
-		h("link", { rel: "icon", href: "/static/img/tga.png" }),
-		h("style", {}, css(styles)),
-	]),
-	h("body", {}, [
-		h("div", { id: "dino", }, [
-			h("img", { id: "body", src: "/static/img/dino.png", alt: "dino" }),
-			h("img", { id: "flower", class: "obj", src: "/static/img/flower1.png", alt: "flower"  }),
+export default async () => {
+	return "<!DOCTYPE html>" + h("html", { lang: "en" }, [
+		h("head", {}, [
+			h("title", {}, "tga"),
+			h("meta", { charset: "utf-8", }),
+			h("meta", { name: "description", content: "tga's homepage", }),
+			h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
+			h("link", { rel: "icon", href: "/static/img/tga.png" }),
+			h("style", {}, css(styles)),
 		]),
-		h("img", { id: "title", src: "/static/img/title.png", alt: "title", }),
-		h("div", { class: "games wrapper", }, games.map((game) => h("a", { class: "box obj", href: game.link }, [
-			h("img", { class: "img obj", src: game.img, alt: game.name, }),
-		]))),
-		h("a", { href: "/randomlink", target: "_blank" }, [
-			h("img", { id: "randomlink", class: "obj", src: "/static/img/randomlink.png", alt: "random link", }),
+		h("body", {}, [
+			h("div", { id: "dino", }, [
+				h("img", { id: "body", src: "/static/img/dino.png", alt: "dino" }),
+				h("img", { id: "flower", class: "obj", src: "/static/img/flower1.png", alt: "flower"  }),
+				h("img", { id: "eye", src: "/static/img/eye.png", alt: "eye"  }),
+			]),
+			h("img", { id: "title", src: "/static/img/title.png", alt: "title", }),
+			h("div", { class: "games wrapper", }, games.map((game) => h("a", { class: "box obj", href: game.link }, [
+				h("img", { class: "img obj", src: game.img, alt: game.name, }),
+			]))),
+			h("a", { href: "/randomlink", target: "_blank" }, [
+				h("img", { id: "randomlink", class: "obj", src: "/static/img/randomlink.png", alt: "random link", }),
+			]),
+			h("img", { id: "elsewhere", src: "/static/img/elsewhere.png", alt: "elsewhere", }),
+			h("div", { class: "sites wrapper", }, sites.map((site) => h("a", { class: "box obj", href: site.link }, [
+				h("img", { class: "img obj", src: `/static/img/${site.name}.png`, alt: site.name, })
+			]))),
+			h("script", {}, await js("client/index.ts")),
 		]),
-		h("img", { id: "elsewhere", src: "/static/img/elsewhere.png", alt: "elsewhere", }),
-		h("div", { class: "sites wrapper", }, sites.map((site) => h("a", { class: "box obj", href: site.link }, [
-			h("img", { class: "img obj", src: `/static/img/${site.name}.png`, alt: site.name, })
-		]))),
-		h("script", {}, await js("client/index.ts")),
-	]),
-])
+	])
+}
