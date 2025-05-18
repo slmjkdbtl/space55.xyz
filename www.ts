@@ -495,33 +495,33 @@ export function files(route = "", root = ""): Handler {
 }
 
 export function filebrowser(route = "", root = ""): Handler {
+	route = trimSlashes(route)
+	root = trimSlashes(root)
 	return async ({ req, res, next }) => {
-		route = trimSlashes(route)
-		const pathname = trimSlashes(decodeURIComponent(req.url.pathname))
-		if (!pathname.startsWith(route)) return next()
-		const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
-		const p = path.join("./" + trimSlashes(root), relativeURLPath)
-		if (isFileSync(p)) return res.sendFile(p)
-		if (!isDirSync(p)) return next()
-		const dir = p
-		const entries = fs.readdirSync(dir)
+		const urlPath = trimSlashes(decodeURIComponent(req.url.pathname))
+		if (!urlPath.startsWith(route)) return next()
+		const relativeURLPath = urlPath.replace(new RegExp(`^${route}/?`), "")
+		const isRoot = relativeURLPath === ""
+		const realPath = path.join("./" + root, relativeURLPath)
+		if (isFileSync(realPath)) return res.sendFile(realPath)
+		if (!isDirSync(realPath)) return next()
+		const entries = fs.readdirSync(realPath)
 			.filter((entry) => !entry.startsWith("."))
 			.sort((a, b) => a > b ? -1 : 1)
 			.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
 		const files = []
 		const dirs = []
 		for (const entry of entries) {
-			const pp = path.join(dir, entry)
-			if (isDirSync(pp)) {
+			const p = path.join(realPath, entry)
+			if (isDirSync(p)) {
 				dirs.push(entry)
-			} else if (isFileSync(pp)) {
+			} else if (isFileSync(p)) {
 				files.push(entry)
 			}
 		}
-		const isRoot = relativeURLPath === ""
 		return res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			h("head", {}, [
-				h("title", {}, decodeURI(req.url.pathname)),
+				h("title", {}, urlPath + "/"),
 				h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
 				h("style", {}, css({
 					"*": {
@@ -551,6 +551,7 @@ export function filebrowser(route = "", root = ""): Handler {
 					},
 					"#tree": {
 						"border-right": "dotted 2px #ccc",
+						"outline": "none",
 						"@media": {
 							"(max-width: 640px)": {
 								"border-bottom": "dotted 2px #ccc"
@@ -606,21 +607,42 @@ export function filebrowser(route = "", root = ""): Handler {
 				})),
 			]),
 			h("body", {}, [
-				h("ul", { id: "tree", class: "box" }, [
+				h("ul", { id: "tree", class: "box", tabindex: 0 }, [
 					...(isRoot ? [] : [
-						h("a", { href: `/${parentPath(dir)}`, }, ".."),
+						h("a", { href: `/${parentPath(realPath)}`, }, ".."),
 					]),
 					...dirs.map((d) => h("li", {}, [
-						h("a", { href: `/${dir}/${d}`, }, d + "/"),
+						h("a", { href: `/${realPath}/${d}`, }, d + "/"),
 					])),
 					...files.map((file) => h("li", {}, [
-						h("a", { class: "entry" }, file),
+						h("a", { href: `#${file}`, class: "entry" }, file),
 					])),
 				]),
 				h("div", { id: "content", class: "box" }, []),
 				h("script", {}, `
 const entries = document.querySelectorAll(".entry")
 const content = document.querySelector("#content")
+const tree = document.querySelector("#tree")
+let curIdx = null
+
+tree.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    e.preventDefault()
+    if (curIdx === null) {
+      toIdx(0)
+    } else {
+      if (e.key === "ArrowUp") {
+        if (curIdx > 0) {
+          location.hash = "#" + entries[curIdx - 1].textContent
+        }
+      } else if (e.key === "ArrowDown") {
+        if (curIdx < entries.length - 1) {
+          location.hash = "#" + entries[curIdx + 1].textContent
+        }
+      }
+    }
+  }
+})
 
 function isInView(el) {
   const rect = el.getBoundingClientRect()
@@ -636,33 +658,51 @@ function getHash() {
   return decodeURIComponent(location.hash.substring(1))
 }
 
-async function updateContent(file) {
-  let found = false
+function reset() {
   for (const entry of entries) {
     entry.classList.remove("selected")
-    if (!found && entry.textContent === file) {
-      found = true
-      entry.classList.add("selected")
-      if (!isInView(entry)) {
-        entry.scrollIntoView()
-      }
-    }
   }
-  content.textContent = ""
+  content.innerHTML = ""
+  document.title = "${urlPath}" + "/"
+  curIdx = null
+}
+
+async function toIdx(i) {
+
+  const entry = entries[i]
+  if (!entry) return
+
+  reset()
+  curIdx = i
+  entry.classList.add("selected")
+
+  if (!isInView(entry)) {
+    entry.scrollIntoView()
+  }
+
+  const file = entry.textContent
+
+  document.title = "${urlPath}" + "/" + file
+
   const anim = setInterval(() => {
     let c = content.textContent.length
     c = (c + 1) % 4
     content.textContent = ".".repeat(c)
   }, 100)
-  const url = "/" + "${dir}" + "/" + encodeURIComponent(file)
+
+  const url = "/" + "${realPath}" + "/" + encodeURIComponent(file)
   const res = await fetch(url)
+
   clearInterval(anim)
   content.innerHTML = ""
+
   if (!res.ok) {
     content.textContent = "file not found"
     return
   }
+
   const ty = res.headers.get("Content-Type")
+
   if (ty.startsWith("text/html")) {
     const iframe = document.createElement("iframe")
     iframe.src = url
@@ -687,22 +727,35 @@ async function updateContent(file) {
   } else {
     content.textContent = "file type not supported"
   }
+
 }
 
-for (const entry of entries) {
-  entry.addEventListener("click", () => {
-    const file = entry.textContent
-    updateContent(file)
-    history.pushState(null, "", "#" + file)
-  })
+function findIdx(file) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+    if (entry.textContent === file) {
+      return i
+    }
+  }
+  return -1
+}
+
+function updateHash() {
+  const hash = getHash()
+  const idx = findIdx(hash)
+  if (idx !== -1) {
+    toIdx(idx)
+  } else {
+    reset()
+  }
 }
 
 window.addEventListener("hashchange", () => {
-  updateContent(getHash())
+  updateHash()
 })
 
 if (location.hash) {
-  updateContent(getHash())
+  updateHash()
 }
 				`),
 			]),

@@ -21,7 +21,7 @@ const randItem = <D>(arr: D[]) => arr[rand(0, arr.length)]
 
 server.use(files("/static", "static"))
 server.use(filebrowser("/files", "files"))
-server.use(route("GET", "/", async ({ res }) => res.sendHTML(await index())))
+server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
