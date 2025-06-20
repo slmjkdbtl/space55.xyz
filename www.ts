@@ -482,6 +482,9 @@ export const route = overload2((pat: string, handler: Handler): Handler => {
 	}
 })
 
+const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
+const parentPath = (p: string, sep = "/") => p.split(sep).slice(0, -1).join(sep)
+
 export function files(route = "", root = ""): Handler {
 	return ({ req, res, next }) => {
 		route = trimSlashes(route)
@@ -502,17 +505,17 @@ export function filebrowser(route = "", root = ""): Handler {
 		if (!urlPath.startsWith(route)) return next()
 		const relativeURLPath = urlPath.replace(new RegExp(`^${route}/?`), "")
 		const isRoot = relativeURLPath === ""
-		const realPath = path.join("./" + root, relativeURLPath)
-		if (isFileSync(realPath)) return res.sendFile(realPath)
-		if (!isDirSync(realPath)) return next()
-		const entries = fs.readdirSync(realPath)
+		const diskPath = path.join("./" + root, relativeURLPath)
+		if (isFileSync(diskPath)) return res.sendFile(diskPath)
+		if (!isDirSync(diskPath)) return next()
+		const entries = fs.readdirSync(diskPath)
 			.filter((entry) => !entry.startsWith("."))
 			.sort((a, b) => a > b ? -1 : 1)
 			.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
 		const files = []
 		const dirs = []
 		for (const entry of entries) {
-			const p = path.join(realPath, entry)
+			const p = path.join(diskPath, entry)
 			if (isDirSync(p)) {
 				dirs.push(entry)
 			} else if (isFileSync(p)) {
@@ -609,10 +612,10 @@ export function filebrowser(route = "", root = ""): Handler {
 			h("body", {}, [
 				h("ul", { id: "tree", class: "box", tabindex: 0 }, [
 					...(isRoot ? [] : [
-						h("a", { href: `/${parentPath(realPath)}`, }, ".."),
+						h("a", { href: `/${parentPath(diskPath)}`, }, ".."),
 					]),
 					...dirs.map((d) => h("li", {}, [
-						h("a", { href: `/${realPath}/${d}`, }, d + "/"),
+						h("a", { href: `/${diskPath}/${d}`, }, d + "/"),
 					])),
 					...files.map((file) => h("li", {}, [
 						h("a", { href: `#${file}`, class: "entry" }, file),
@@ -654,10 +657,6 @@ function isInView(el) {
   )
 }
 
-function getHash() {
-  return decodeURIComponent(location.hash.substring(1))
-}
-
 function reset() {
   for (const entry of entries) {
     entry.classList.remove("selected")
@@ -690,7 +689,7 @@ async function toIdx(i) {
     content.textContent = ".".repeat(c)
   }, 100)
 
-  const url = "/" + "${realPath}" + "/" + encodeURIComponent(file)
+  const url = "/" + "${diskPath}" + "/" + encodeURIComponent(file)
   const res = await fetch(url)
 
   clearInterval(anim)
@@ -738,6 +737,10 @@ function findIdx(file) {
     }
   }
   return -1
+}
+
+function getHash() {
+  return decodeURIComponent(location.hash.substring(1))
 }
 
 function updateHash() {
@@ -933,9 +936,6 @@ export function logger(opts: LoggerOpts = {}): Handler {
 		return next()
 	}
 }
-
-const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
-const parentPath = (p: string, sep = "/") => p.split(sep).slice(0, -1).join(sep)
 
 export function matchPath(pat: string, url: string): Record<string, string> | null {
 
