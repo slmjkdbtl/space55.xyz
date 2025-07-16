@@ -62,7 +62,7 @@ export type Ctx = {
 	onError: (action: (e: Error) => void) => void,
 }
 
-export type Handler = (ctx: Ctx) => void
+export type Handler = (ctx: Ctx) => void | Promise<void>
 export type ErrorHandler = (ctx: Ctx, err: Error) => void
 export type NotFoundHandler = (ctx: Ctx) => void
 
@@ -164,10 +164,8 @@ export type WebSocketData = {
 // TODO: support arbituary data
 export type WebSocket = ServerWebSocket<WebSocketData>
 
-const isPromise = (input: any): input is Promise<any> => {
-	return input
-		&& typeof input.then === "function"
-		&& typeof input.catch === "function"
+function isAsync(fn: Function): fn is (...args: any[]) => Promise<any> {
+	return fn.constructor.name === "AsyncFunction"
 }
 
 export function createServer(opts: ServerOpts = {}): Server {
@@ -358,17 +356,18 @@ export function createServer(opts: ServerOpts = {}): Server {
 					},
 				}
 				if (h) {
-					try {
-						const res = h(ctx)
-						if (isPromise(res)) {
-							res.catch((e) => {
-								errHandler(ctx, e)
-								onErrorEvents.forEach((f) => f(e))
-							})
+					if (isAsync(h)) {
+						h(ctx).catch((e) => {
+							errHandler(ctx, e)
+							onErrorEvents.forEach((f) => f(e))
+						})
+					} else {
+						try {
+							h(ctx)
+						} catch (e) {
+							errHandler(ctx, e as Error)
+							onErrorEvents.forEach((f) => f(e as Error))
 						}
-					} catch (e) {
-						errHandler(ctx, e as Error)
-						onErrorEvents.forEach((f) => f(e as Error))
 					}
 				} else {
 					notFoundHandler(ctx)

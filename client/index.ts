@@ -20,6 +20,8 @@ const map = (v: number, l1: number, h1: number, l2: number, h2: number): number 
 
 const eye = document.querySelector<HTMLImageElement>("#eye")
 
+// TODO: doesn't work when cursor is above
+
 if (eye) {
 	const origEyePos = eye.getBoundingClientRect()
 	document.addEventListener("mousemove", (e) => {
