@@ -518,8 +518,20 @@ export function filebrowser(route = "", root = ""): Handler {
 			if (isDirSync(p)) {
 				dirs.push(entry)
 			} else if (isFileSync(p)) {
-				files.push(entry)
+				if (entry.startsWith("README") || entry === "index.html") {
+					files.unshift(entry)
+				} else {
+					files.push(entry)
+				}
 			}
+		}
+		function resolveDefFile(p: string) {
+			if (isFileSync(path.join(p, "index.html"))) {
+				return p + "#index.html"
+			} else if (isFileSync(path.join(p, "README.txt"))) {
+				return p + "#README.txt"
+			}
+			return p
 		}
 		return res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			h("head", {}, [
@@ -611,10 +623,10 @@ export function filebrowser(route = "", root = ""): Handler {
 			h("body", {}, [
 				h("ul", { id: "tree", class: "box", tabindex: 0 }, [
 					...(isRoot ? [] : [
-						h("a", { href: `/${parentPath(diskPath)}`, }, ".."),
+						h("a", { href: `/${resolveDefFile(parentPath(diskPath))}`, }, ".."),
 					]),
 					...dirs.map((d) => h("li", {}, [
-						h("a", { href: `/${diskPath}/${d}`, }, d + "/"),
+						h("a", { href: `/${resolveDefFile(`${diskPath}/${d}`)}`, }, d + "/"),
 					])),
 					...files.map((file) => h("li", {}, [
 						h("a", { href: `#${file}`, class: "entry" }, file),
@@ -718,6 +730,11 @@ async function toIdx(i) {
     video.src = url
     video.controls = true
     content.append(video)
+  } else if (ty.startsWith("audio/")) {
+    const audio = document.createElement("audio")
+    audio.src = url
+    audio.controls = true
+    content.append(audio)
   } else if (ty.includes("pdf")) {
     const embed = document.createElement("embed")
     embed.src = url

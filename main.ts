@@ -1,6 +1,4 @@
-import { $ } from "bun"
 import {
-	isDev,
 	createServer,
 	files,
 	filebrowser,

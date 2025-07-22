@@ -62,5 +62,5 @@ if (!collection) {
 
 console.log(`fetching links...`)
 const raindrops = await getRaindrops(collection)
-Bun.write(DEST, raindrops.map((r) => r.link).join("\n"))
+Bun.write(DEST, raindrops.map((r) => r.link).sort().join("\n"))
 console.log(`links saved to ${DEST}`)

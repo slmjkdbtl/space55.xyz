@@ -94,6 +94,15 @@ const styles = {
 		"user-select": "none",
 		"cursor": "url(/static/img/cursor1.png), default",
 	},
+	"html": {
+		"width": "100%",
+	},
+	"body": {
+		"width": "100%",
+		"background-color": "#000000",
+		// "background": "url(/static/img/space.jpg)",
+		"text-align": "center",
+	},
 	".obj": {
 		":hover": {
 			"cursor": "url(/static/img/cursor2.png), default",
@@ -104,15 +113,6 @@ const styles = {
 		":hover": {
 			"cursor": "url(/static/img/cursors/2.png), default",
 		},
-	},
-	"html": {
-		"width": "100%",
-	},
-	"body": {
-		"width": "100%",
-		"background-color": "#000000",
-		// "background": "url(/static/img/space.jpg)",
-		"text-align": "center",
 	},
 	".box": {
 		"height": "auto",

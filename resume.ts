@@ -66,7 +66,8 @@ const sites = [
 	{ name: "DEOT", url: "https://deot.vercel.app/", img: "deot.jpg" },
 	{ name: "Locus Chen", url: "https://old.locuschen.com/", img: "locus.jpg" },
 	{ name: "tga", url: "https://space55.xyz/", img: "space55.jpg" },
-	{ name: "FFF Food Studio", url: "http://64.23.143.14:4004/", img: "fff.jpg" },
+	{ name: "FFF Food Studio", url: "http://64.23.250.59:4003/", img: "fff.jpg" },
+	{ name: "Zhua", url: "http://64.23.250.59:4004/", img: "zhua.jpg" },
 	{ name: "David Murray", url: "https://davidmurray.xyz/", img: "davidmurray.jpg" },
 ]
 

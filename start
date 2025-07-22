@@ -2,4 +2,3 @@
 
 bun install
 bun run main.ts
-
