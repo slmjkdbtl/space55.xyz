@@ -1,9 +1,10 @@
 // helper functions for the world wide web with Bun
 
 if (typeof Bun === "undefined") {
-	throw new Error("Requires Bun")
+	throw new Error("requires bun")
 }
 
+// TODO: use fs/promises
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type {
@@ -93,7 +94,6 @@ export type Server = {
 		onMessage: (action: (ws: WebSocket, msg: string | Buffer) => void) => EventController,
 		onOpen: (action: (ws: WebSocket) => void) => EventController,
 		onClose: (action: (ws: WebSocket) => void) => EventController,
-		broadcast: (data: string | Bun.BufferSource, compress?: boolean) => void,
 		publish: (
 			topic: string,
 			data: string | DataView | ArrayBuffer | SharedArrayBuffer,
@@ -164,8 +164,20 @@ export type WebSocketData = {
 // TODO: support arbituary data
 export type WebSocket = ServerWebSocket<WebSocketData>
 
-function isAsync(fn: Function): fn is (...args: any[]) => Promise<any> {
-	return fn.constructor.name === "AsyncFunction"
+// TODO: can pass a full Response
+export class HTTPError extends Error {
+	code: number
+	constructor(code: number, msg: string) {
+		super(msg)
+		this.code = code
+		this.name = "HTTPError"
+	}
+}
+
+const isPromise = (input: any): input is Promise<any> => {
+	return input
+		&& typeof input.then === "function"
+		&& typeof input.catch === "function"
 }
 
 export function createServer(opts: ServerOpts = {}): Server {
@@ -345,7 +357,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 					upgrade: (opts) => {
 						const success = bunServer.upgrade(bunReq, opts)
 						// @ts-ignore
-						if (success) resolve(undefined)
+						if (success) resolve()
 						return success
 					},
 					onFinish(action) {
@@ -356,18 +368,17 @@ export function createServer(opts: ServerOpts = {}): Server {
 					},
 				}
 				if (h) {
-					if (isAsync(h)) {
-						h(ctx).catch((e) => {
-							errHandler(ctx, e)
-							onErrorEvents.forEach((f) => f(e))
-						})
-					} else {
-						try {
-							h(ctx)
-						} catch (e) {
-							errHandler(ctx, e as Error)
-							onErrorEvents.forEach((f) => f(e as Error))
+					try {
+						const res = h(ctx)
+						if (isPromise(res)) {
+							res.catch((e) => {
+								errHandler(ctx, e)
+								onErrorEvents.forEach((f) => f(e))
+							})
 						}
+					} catch (e) {
+						errHandler(ctx, e as Error)
+						onErrorEvents.forEach((f) => f(e as Error))
 					}
 				} else {
 					notFoundHandler(ctx)
@@ -379,6 +390,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 
 	const bunServer = Bun.serve({
 		...opts,
+		hostname: opts.hostname ?? "::",
 		websocket,
 		fetch,
 		development: isDev,
@@ -388,8 +400,13 @@ export function createServer(opts: ServerOpts = {}): Server {
 	const use = (handler: Handler) => handlers.push(handler)
 	let errHandler: ErrorHandler = ({ req, res, next }, err) => {
 		console.error(err)
-		res.status = 500
-		res.sendText("500 internal server error")
+		if (err instanceof HTTPError) {
+			res.status = err.code
+			res.sendText(`${err.code} ${err.message}`)
+		} else {
+			res.status = 500
+			res.sendText("500 internal server error")
+		}
 	}
 	let notFoundHandler: NotFoundHandler = ({ res }) => {
 		res.status = 404
@@ -410,12 +427,6 @@ export function createServer(opts: ServerOpts = {}): Server {
 			onOpen: (action) => wsEvents.open.add(action),
 			onClose: (action) => wsEvents.close.add(action),
 			publish: bunServer.publish.bind(bunServer),
-			// TODO: option to exclude self
-			broadcast: (data: string | Bun.BufferSource, compress?: boolean) => {
-				wsClients.forEach((client) => {
-					client.send(data, compress)
-				})
-			},
 		},
 	}
 }
@@ -1081,6 +1092,7 @@ export type Table<D = DBData> = {
 	insert: (data: D) => void,
 	update: (data: Partial<D>, where: WhereCondition) => void,
 	delete: (where: WhereCondition) => void,
+	clear: () => void,
 	find: <D2 = D>(where: WhereCondition) => D2,
 	findAll: <D2 = D>(where: WhereCondition) => D2[],
 	count: (where?: WhereCondition) => number,
@@ -1114,11 +1126,23 @@ export type Database = {
     serialize: (name?: string) => Buffer,
 }
 
+export function dbPath(app: string, name: string) {
+	if (isDev) {
+		return `data/${name}`
+	} else {
+		return `/var/lib/${app}/${name}`
+	}
+}
+
 // TODO: support views
 // TODO: builtin cache system
-export function createDatabase(dbname: string, opts: CreateDatabaseOpts = {}): Database {
+export function createDatabase(loc: string, opts: CreateDatabaseOpts = {}): Database {
 
-	const bdb = new sqlite.Database(dbname)
+	if (loc !== ":memory:") {
+		fs.mkdirSync(path.dirname(loc), { recursive: true })
+	}
+
+	const bdb = new sqlite.Database(loc)
 	const queries: Record<string, sqlite.Statement> = {}
 
 	if (opts.wal) {
@@ -1436,6 +1460,12 @@ ${genWhereSQL(where, vars)}
 			`).run(vars)
 		}
 
+		function clear() {
+			compile(`
+DELET FROM ${tableName}
+			`).run()
+		}
+
 		function remove(where: WhereCondition) {
 			const vars = {}
 			if (topts.paranoid) {
@@ -1461,6 +1491,7 @@ ${genWhereSQL(where, vars)}
 			insert,
 			search,
 			delete: remove,
+			clear,
 			schema,
 		}
 
