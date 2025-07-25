@@ -20,11 +20,17 @@ const randItem = <D>(arr: D[]) => arr[rand(0, arr.length)]
 
 server.use(files("/static", "static"))
 server.use(filebrowser("/files", "files"))
+
 server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
 server.use(route("GET", "/portfolio", ({ res }) => res.sendHTML(resume)))
+
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), 303)))
+
 server.use(route("POST", "/tmp", tmp.upload))
+server.use(route("GET", "/tmp", tmp.browse))
 server.use(route("GET", "/tmp/:id", tmp.download))
+server.use(route("DELETE", "/tmp", tmp.purge))
+server.use(route("DELETE", "/tmp/:id", tmp.remove))

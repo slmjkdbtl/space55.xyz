@@ -4,8 +4,7 @@ if (typeof Bun === "undefined") {
 	throw new Error("requires bun")
 }
 
-// TODO: use fs/promises
-import * as fs from "node:fs"
+import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type {
 	ServeOptions,
@@ -174,10 +173,13 @@ export class HTTPError extends Error {
 	}
 }
 
-const isPromise = (input: any): input is Promise<any> => {
-	return input
-		&& typeof input.then === "function"
-		&& typeof input.catch === "function"
+const isPromise = (value: any): value is Promise<any> => {
+	return (
+		value !== null &&
+		typeof value === "object" &&
+		typeof value.then === "function" &&
+		typeof value.catch === "function"
+	)
 }
 
 export function createServer(opts: ServerOpts = {}): Server {
@@ -290,9 +292,10 @@ export function createServer(opts: ServerOpts = {}): Server {
 			}
 
 			function sendFile(p: string, opt: SendFileOpt = {}) {
-				if (!isFileSync(p)) return
 				const file = Bun.file(p)
-				if (file.size === 0) return
+				if (file.size === 0) {
+					throw new HTTPError(404, "not found")
+				}
 				const mtimeServer = req.headers.get("If-Modified-Since")
 				const mtimeClient = toHTTPDate(new Date(file.lastModified))
 				if (mtimeServer === mtimeClient) {
@@ -495,6 +498,13 @@ export const route = overload2((pat: string, handler: Handler): Handler => {
 const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
 const parentPath = (p: string, sep = "/") => p.split(sep).slice(0, -1).join(sep)
 
+export async function mapAsync<T, U>(
+	arr: T[],
+	fn: (item: T, index: number, arr: T[]) => Promise<U>
+): Promise<U[]> {
+	return Promise.all(arr.map(fn))
+}
+
 export function files(route = "", root = ""): Handler {
 	return ({ req, res, next }) => {
 		route = trimSlashes(route)
@@ -516,9 +526,9 @@ export function filebrowser(route = "", root = ""): Handler {
 		const relativeURLPath = urlPath.replace(new RegExp(`^${route}/?`), "")
 		const isRoot = relativeURLPath === ""
 		const diskPath = path.join("./" + root, relativeURLPath)
-		if (isFileSync(diskPath)) return res.sendFile(diskPath)
-		if (!isDirSync(diskPath)) return next()
-		const entries = fs.readdirSync(diskPath)
+		if (await isFile(diskPath)) return res.sendFile(diskPath)
+		if (!await isDir(diskPath)) return next()
+		const entries = (await fs.readdir(diskPath))
 			.filter((entry) => !entry.startsWith("."))
 			.sort((a, b) => a > b ? -1 : 1)
 			.sort((a, b) => path.extname(a) > path.extname(b) ? 1 : -1)
@@ -526,9 +536,9 @@ export function filebrowser(route = "", root = ""): Handler {
 		const dirs = []
 		for (const entry of entries) {
 			const p = path.join(diskPath, entry)
-			if (isDirSync(p)) {
+			if (await isDir(p)) {
 				dirs.push(entry)
-			} else if (isFileSync(p)) {
+			} else if (await isFile(p)) {
 				if (entry.startsWith("README") || entry === "index.html") {
 					files.unshift(entry)
 				} else {
@@ -536,10 +546,10 @@ export function filebrowser(route = "", root = ""): Handler {
 				}
 			}
 		}
-		function resolveDefFile(p: string) {
-			if (isFileSync(path.join(p, "index.html"))) {
+		async function resolveDefFile(p: string) {
+			if (await isFile(path.join(p, "index.html"))) {
 				return p + "#index.html"
-			} else if (isFileSync(path.join(p, "README.txt"))) {
+			} else if (await isFile(path.join(p, "README.txt"))) {
 				return p + "#README.txt"
 			}
 			return p
@@ -634,10 +644,10 @@ export function filebrowser(route = "", root = ""): Handler {
 			h("body", {}, [
 				h("ul", { id: "tree", class: "box", tabindex: 0 }, [
 					...(isRoot ? [] : [
-						h("a", { href: `/${resolveDefFile(parentPath(diskPath))}`, }, ".."),
+						h("a", { href: `/${await resolveDefFile(parentPath(diskPath))}`, }, ".."),
 					]),
-					...dirs.map((d) => h("li", {}, [
-						h("a", { href: `/${resolveDefFile(`${diskPath}/${d}`)}`, }, d + "/"),
+					...await mapAsync(dirs, async (d: string) => h("li", {}, [
+						h("a", { href: `/${await resolveDefFile(`${diskPath}/${d}`)}`, }, d + "/"),
 					])),
 					...files.map((file) => h("li", {}, [
 						h("a", { href: `#${file}`, class: "entry" }, file),
@@ -834,20 +844,16 @@ export type LoggerOpts = {
 	stderr?: boolean,
 }
 
-export function toReadableSize(byteSize: number) {
-	const toFixed = (n: number) => Number(n.toFixed(2))
-	if (byteSize >= Math.pow(1024, 4)) {
-		return `${toFixed(byteSize / 1024 / 1024 / 1024 / 1024)}tb`
-	} else if (byteSize >= Math.pow(1024, 3)) {
-		return `${toFixed(byteSize / 1024 / 1024 / 1024)}gb`
-	} else if (byteSize >= Math.pow(1024, 2)) {
-		return `${toFixed(byteSize / 1024 / 1024)}mb`
-	} else if (byteSize >= Math.pow(1024, 1)) {
-		return `${toFixed(byteSize / 1024)}kb`
-	} else {
-		return `${byteSize}b`
-	}
+export function fmtBytes(bytes: number, decimals: number = 2) {
+	if (bytes === 0) return "0b"
+	const k = 1024
+	const dm = decimals < 0 ? 0 : decimals
+	const sizes = ["b", "kb", "mb", "gb", "tb", "pb"]
+	const i = Math.floor(Math.log(bytes) / Math.log(k))
+	const size = parseFloat((bytes / Math.pow(k, i)).toFixed(dm))
+	return `${size}${sizes[i]}`
 }
+
 
 // TODO: is there a way to get bun calculated Content-Length result?
 // TODO: ReadableStream?
@@ -875,10 +881,10 @@ export function getBodySize(body: BodyInit) {
 }
 
 // TODO: can there be a onStart() to record time
-export function logger(opts: LoggerOpts = {}): Handler {
+export async function logger(opts: LoggerOpts = {}): Promise<Handler> {
 	let reqTable: Table | null = null
 	if (opts.db) {
-		const db = createDatabase(opts.db)
+		const db = await createDatabase(opts.db)
 		reqTable = db.table("request", {
 			"id":     { type: "INTEGER", primaryKey: true, autoIncrement: true },
 			"method": { type: "TEXT" },
@@ -934,17 +940,17 @@ export function logger(opts: LoggerOpts = {}): Handler {
 			msg.push(`${a.dim}${endTime.getTime() - startTime.getTime()}ms${a.reset}`)
 			const size = res.body ? getBodySize(res.body) : 0
 			if (size) {
-				msg.push(`${a.dim}${toReadableSize(size)}${a.reset}`)
+				msg.push(`${a.dim}${fmtBytes(size)}${a.reset}`)
 			}
 			return msg.join(" ")
 		}
 		const startTime = new Date()
-		onFinish(() => {
+		onFinish(async () => {
 			if (opts.stdout !== false) {
 				console.log(genMsg({ color: true }))
 			}
 			if (opts.file) {
-				fs.appendFileSync(opts.file, genMsg({ color: false }) + "\n", "utf8")
+				fs.appendFile(opts.file, genMsg({ color: false }) + "\n", "utf8")
 			}
 			if (reqTable) {
 				reqTable.insert({
@@ -1049,14 +1055,14 @@ export type OrderCondition = {
 	columns: string[],
 	desc?: boolean,
 }
-export type LimitCondition = number
 
 export type SelectOpts = {
 	columns?: "*" | ColumnName[],
 	distinct?: boolean,
 	where?: WhereCondition,
 	order?: OrderCondition,
-	limit?: LimitCondition,
+	limit?: number,
+	offset?: number,
 	join?: JoinTable<any>[],
 }
 
@@ -1130,16 +1136,17 @@ export function dbPath(app: string, name: string) {
 	if (isDev) {
 		return `data/${name}`
 	} else {
-		return `/var/lib/${app}/${name}`
+		return `${Bun.env["HOME"]}/.local/share/${app}/${name}`
 	}
 }
 
+// TODO: db viewer
 // TODO: support views
 // TODO: builtin cache system
-export function createDatabase(loc: string, opts: CreateDatabaseOpts = {}): Database {
+export async function createDatabase(loc: string, opts: CreateDatabaseOpts = {}): Promise<Database> {
 
 	if (loc !== ":memory:") {
-		fs.mkdirSync(path.dirname(loc), { recursive: true })
+		await fs.mkdir(path.dirname(loc), { recursive: true })
 	}
 
 	const bdb = new sqlite.Database(loc)
@@ -1186,9 +1193,14 @@ export function createDatabase(loc: string, opts: CreateDatabaseOpts = {}): Data
 		return `ORDER BY ${order.columns.join(", ")}${order.desc ? " DESC" : ""}`
 	}
 
-	function genLimitSQL(limit: LimitCondition, vars: DBVars) {
+	function genLimitSQL(limit: number, vars: DBVars) {
 		vars["$limit"] = limit
 		return `LIMIT $limit`
+	}
+
+	function genOffsetSQL(offset: number, vars: DBVars) {
+		vars["$offset"] = offset
+		return `OFFSET $offset`
 	}
 
 	// TODO: support multiple values
@@ -1407,6 +1419,7 @@ FROM ${tableName}
 ${opts.where ? genWhereSQL(opts.where, vars) : ""}
 ${opts.order ? genOrderSQL(opts.order) : ""}
 ${opts.limit ? genLimitSQL(opts.limit, vars) : ""}
+${opts.offset ? genOffsetSQL(opts.offset, vars) : ""}
 			`).all(vars) ?? []
 			return transformItems(items) as D2[]
 		}
@@ -1462,7 +1475,7 @@ ${genWhereSQL(where, vars)}
 
 		function clear() {
 			compile(`
-DELET FROM ${tableName}
+DELETE FROM ${tableName}
 			`).run()
 		}
 
@@ -1518,19 +1531,25 @@ export const trydo = overload2(<T>(action: () => T, def: T) => {
 		return def
 	}
 }, <T>(action: () => T) => {
-	try {
-		return action()
-	} catch {
-		return null
-	}
+	return trydo(action, null)
 })
 
-export function isFileSync(path: string) {
-	return trydo(() => fs.statSync(path).isFile(), false)
+export async function isFile(path: string) {
+	try {
+		const stat = await fs.stat(path)
+		return stat.isFile()
+	} catch {
+		return false
+	}
 }
 
-export function isDirSync(path: string) {
-	return trydo(() => fs.statSync(path).isDirectory(), false)
+export async function isDir(path: string) {
+	try {
+		const stat = await fs.stat(path)
+		return stat.isDirectory()
+	} catch {
+		return false
+	}
 }
 
 export type ResponseOpts = {
@@ -1687,9 +1706,9 @@ export function h(
 
 }
 
-export function dataurl(path: string) {
+export async function dataurl(path: string) {
 	const file = Bun.file(path)
-	const base64 = fs.readFileSync(path, { encoding: "base64" })
+	const base64 = await fs.readFile(path, { encoding: "base64" })
 	return `data:${file.type};base64,${base64}`
 }
 
@@ -2106,3 +2125,18 @@ export const ansi = {
 	rgb: (r: number, g: number, b: number) => `\x1b[38;2;${r};${g};${b}m`,
 	rgbbg: (r: number, g: number, b: number) => `\x1b[48;2;${r};${g};${b}m`,
 }
+
+// in bytes
+export const KB = 1024
+export const MB = KB * 1024
+export const GB = MB * 1024
+export const TB = GB * 1024
+
+// in ms
+export const SECOND = 1000
+export const MINUTE = SECOND * 60
+export const HOUR = MINUTE * 60
+export const DAY = HOUR * 24
+export const WEEK = DAY * 7
+export const MONTH = DAY * 30
+export const YEAR = DAY * 365
