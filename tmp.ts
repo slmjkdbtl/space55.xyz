@@ -32,7 +32,7 @@ type DBFile = {
 	data: Uint8Array,
 }
 
-const fileTable = db.table<DBFile>("file", {
+const dataTable = db.table<DBFile>("data", {
 	"id":   { type: "TEXT", primaryKey: true },
 	"hash": { type: "TEXT", index: true },
 	"type": { type: "TEXT" },
@@ -57,7 +57,7 @@ const gate = (handler: Handler): Handler => {
 export const download: Handler = (ctx) => {
 	const { req, res } = ctx
 	const id = req.params["id"]
-	const file = fileTable.find({ id: id })
+	const file = dataTable.find({ id: id })
 	if (!file) {
 		throw new HTTPError(404, "not found")
 	}
@@ -66,6 +66,17 @@ export const download: Handler = (ctx) => {
 			"Content-Type": file["type"],
 		}
 	})
+}
+
+function appendCharsetUTF8(mime: string): string {
+	const lower = mime.toLowerCase()
+	if (
+		lower.startsWith("text/") &&
+		!/\bcharset=/.test(lower)
+	) {
+		return mime + "; charset=utf-8"
+	}
+	return mime
 }
 
 export const upload: Handler = gate(async (ctx) => {
@@ -96,7 +107,7 @@ export const upload: Handler = gate(async (ctx) => {
 			const bytes = encoder.encode(text)
 			return {
 				data: bytes,
-				type: contentType,
+				type: appendCharsetUTF8(contentType),
 			}
 		} else {
 			throw new HTTPError(400, `data type not supported: ${contentType}`)
@@ -104,13 +115,13 @@ export const upload: Handler = gate(async (ctx) => {
 	})()
 	const hash = crypto.createHash("sha256").update(data).digest("base64")
 	const id = (() => {
-		const existing = fileTable.find({ hash: hash })
+		const existing = dataTable.find({ hash: hash })
 		if (existing) {
 			return existing.id
 		}
 		// TODO: deal with ID collision
 		const id = randAlphaNum()
-		fileTable.insert({
+		dataTable.insert({
 			id,
 			hash,
 			type,
@@ -124,32 +135,33 @@ export const upload: Handler = gate(async (ctx) => {
 
 export const purge: Handler = gate((ctx) => {
 	const { req, res } = ctx
-	fileTable.clear()
+	dataTable.clear()
 	res.sendText("ok")
 })
 
 export const remove: Handler = gate((ctx) => {
 	const { req, res } = ctx
 	const id = req.params["id"]
-	fileTable.delete({ id: id })
+	dataTable.delete({ id: id })
 	res.sendText("ok")
 })
 
 export const browse: Handler = (ctx) => {
 	// TODO
 	const { req, res } = ctx
-	const files = fileTable.select()
+	const files = dataTable.select()
 	res.sendText("TODO")
 }
 
 export function removeExpired() {
-	const files = fileTable.select()
+	const files = dataTable.select()
 	const now = new Date().getTime()
 	for (const file of files) {
+		// @ts-ignore
 		const timeCreated = new Date(file["time_created"]).getTime()
 		const diff = now - timeCreated
 		if (diff > EXPIRE_TIME) {
-			fileTable.delete({ id: file["id"] })
+			dataTable.delete({ id: file["id"] })
 		}
 	}
 }

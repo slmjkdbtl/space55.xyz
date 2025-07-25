@@ -85,9 +85,9 @@ export type Server = {
 	error: (handler: ErrorHandler) => void,
 	notFound: (action: NotFoundHandler) => void,
     stop: (closeActiveConnections?: boolean) => void,
-	hostname: string,
+	hostname: string | undefined,
 	url: URL,
-	port: number,
+	port: number | undefined,
 	ws: {
 		clients: Map<string, WebSocket>,
 		onMessage: (action: (ws: WebSocket, msg: string | Buffer) => void) => EventController,
@@ -101,7 +101,11 @@ export type Server = {
 	},
 }
 
-export type ServerOpts = Omit<ServeOptions, "fetch"> | Omit<WebSocketServeOptions, "fetch">
+export type ServerOpts = {
+	hostname?: string,
+	port?: number,
+	idleTimeout?: number,
+}
 
 export type ServerUpgradeOpts<T = undefined> = {
 	headers?: HeadersInit,
@@ -268,7 +272,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 					headers: headers,
 					status: status,
 				})
-				if (bunReq.method.toLowerCase() === "head") {
+				if (bunReq.method.toUpperCase() === "HEAD") {
 					// TODO
 				}
 				resolve(bunRes)
@@ -392,8 +396,9 @@ export function createServer(opts: ServerOpts = {}): Server {
 	}
 
 	const bunServer = Bun.serve({
-		...opts,
+		port: opts.port,
 		hostname: opts.hostname ?? "::",
+		idleTimeout: opts.idleTimeout,
 		websocket,
 		fetch,
 		development: isDev,
@@ -484,9 +489,9 @@ export const route = overload2((pat: string, handler: Handler): Handler => {
 	}
 }, (method: string, pat: string, handler: Handler): Handler => {
 	return (ctx) => {
-		let rm = ctx.req.method.toLowerCase()
-		rm = rm === "head" ? "get" : rm
-		const m = method.toLowerCase()
+		let rm = ctx.req.method.toUpperCase()
+		rm = rm === "HEAD" ? "GET" : rm
+		const m = method.toUpperCase()
 		if (rm === m) {
 			return route(pat, handler)(ctx)
 		} else {
@@ -1103,7 +1108,6 @@ export type Table<D = DBData> = {
 	findAll: <D2 = D>(where: WhereCondition) => D2[],
 	count: (where?: WhereCondition) => number,
 	search: (text: string) => D[],
-	schema: TableSchema,
 }
 
 export type TableOpts<D> = {
@@ -1121,12 +1125,14 @@ type TableData<D extends DBData, O extends TableOpts<D>> =
 // https://discord.com/channels/508357248330760243/1203901900844572723
 // typescript has no partial type inference...
 export type Database = {
-	table: <D extends DBData, O extends TableOpts<D> = TableOpts<D>>(
+	createTable: <D extends DBData, O extends TableOpts<D> = TableOpts<D>>(
 		name: string,
 		schema: TableSchema,
 		opts?: O,
 	) => Table<TableData<D, O>>,
 	getTable: <D extends DBData = any>(name: string) => Table<D> | void,
+	dropTable: (name: string) => void,
+	table: Database["createTable"],
 	transaction: (action: () => void) => void,
 	close: () => void,
     serialize: (name?: string) => Buffer,
@@ -1154,14 +1160,6 @@ export async function createDatabase(loc: string, opts: CreateDatabaseOpts = {})
 
 	if (opts.wal) {
 		bdb.run("PRAGMA journal_mode = WAL;")
-	}
-
-	function compile(sql: string) {
-		sql = sql.trim()
-		if (!queries[sql]) {
-			queries[sql] = bdb.query(sql)
-		}
-		return queries[sql]
 	}
 
 	function genColumnNameSQL(columns: "*" | ColumnName[] = "*") {
@@ -1247,144 +1245,52 @@ export async function createDatabase(loc: string, opts: CreateDatabaseOpts = {})
 		return bdb.transaction(action)()
 	}
 
-	function run(sql: string) {
-		bdb.run(sql.trim())
-	}
+	function getTable<D extends DBData>(tableName: string): Table<D> {
 
-	const tables: Record<string, Table<any>> = {}
-
-	function getTable(name: string) {
-		return tables[name]
-	}
-
-	function table<D extends Record<string, any>>(
-		tableName: string,
-		schema: TableSchema,
-		topts: TableOpts<D> = {}
-	): Table<D> {
-
-		if (tableName.endsWith("_fts")) {
-			throw new Error("Cannot manually operate a fts table")
+		function columnExists(column: string): boolean {
+			const stmt = bdb.query<{ count: number }, [ string, string ]>(`
+SELECT COUNT(*) as count
+FROM pragma_table_info(?)
+WHERE name = ?
+			`)
+			const result = stmt.get(tableName, column)
+			if (!result) return false
+			return result.count > 0
 		}
 
-		const boolKeys: string[] = []
+		const isParanoid = columnExists("time_deleted")
 
-		for (const k in schema) {
-			const t = schema[k].type
-			if (t === "BOOLEAN") {
-				boolKeys.push(k)
-			}
+		function getBoolColumns(): string[] {
+			const stmt = bdb.query<{
+				name: string,
+				type: string,
+			}, []>(`PRAGMA table_info(${tableName})`)
+			const results = stmt.all()
+			return results
+				.filter(col => col.type.toUpperCase() === "BOOLEAN")
+				.map(col => col.name)
 		}
 
-		const needsTransform = boolKeys.length > 0
+		const boolColumns = getBoolColumns()
+		const needsTransform = boolColumns.length > 0
 
-		function transformItem(item: any): D {
+		function transformRow(item: any): D {
 			if (!needsTransform) return item
-			for (const k of boolKeys) {
+			for (const k of boolColumns) {
 				item[k] = Boolean(item[k])
 			}
 			return item
 		}
 
-		function transformItems(items: any[]): any[] {
+		function transformRows(items: any[]): any[] {
 			if (!needsTransform) return items
-			return items.map(transformItem)
-		}
-
-		const exists = compile(`SELECT name FROM sqlite_master WHERE type='table' AND name='${tableName}'`).get()
-
-		if (exists) {
-			// TODO: auto migration?
-		} else {
-
-			run(`
-CREATE TABLE ${tableName} (
-${genColumnsSQL({
-...schema,
-...(topts.timeCreated ? {
-	"time_created": { type: "TEXT", default: "CURRENT_TIMESTAMP" },
-} : {}),
-...(topts.timeUpdated ? {
-	"time_updated": { type: "TEXT", default: "CURRENT_TIMESTAMP" },
-} : {}),
-...(topts.paranoid ? {
-	"time_deleted": { type: "TEXT", allowNull: true },
-} : {}),
-})}
-)
-			`)
-			const pks = []
-			const fts = []
-			for (const colName in schema) {
-				const config = schema[colName]
-				if (config.primaryKey) {
-					pks.push(colName)
-				}
-				if (config.index) {
-					run(`
-CREATE INDEX idx_${tableName}_${colName} ON ${tableName}(${colName})
-					`)
-				}
-				if (config.fts) {
-					fts.push(colName)
-				}
-			}
-			if (topts.timeUpdated) {
-				if (pks.length === 0) {
-					throw new Error("time updated requires primary key")
-				}
-				run(`
-CREATE TRIGGER trigger_${tableName}_time_updated
-AFTER UPDATE ON ${tableName}
-BEGIN
-	UPDATE ${tableName}
-	SET time_updated = CURRENT_TIMESTAMP
-	WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
-END
-				`)
-			}
-			if (fts.length > 0) {
-				// TODO: content / content_rowid?
-				run(`
-CREATE VIRTUAL TABLE ${tableName}_fts USING fts5 (${[...pks, ...fts].join(", ")})
-			`)
-			run(`
-CREATE TRIGGER trigger_${tableName}_fts_insert
-AFTER INSERT ON ${tableName}
-BEGIN
-	INSERT INTO ${tableName}_fts (${[...pks, ...fts].join(", ")})
-	VALUES (${[...pks, ...fts].map((c) => `NEW.${c}`).join(", ")});
-END
-				`)
-				run(`
-CREATE TRIGGER trigger_${tableName}_fts_update
-AFTER UPDATE ON ${tableName}
-BEGIN
-	UPDATE ${tableName}_fts
-	SET ${fts.map((c) => `${c} = NEW.${c}`).join(", ")}
-	WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
-END
-				`)
-				run(`
-CREATE TRIGGER trigger_${tableName}_fts_delete
-AFTER DELETE ON ${tableName}
-BEGIN
-	DELETE FROM ${tableName}_fts
-	WHERE ${pks.map((pk) => `${pk} = OLD.${pk}`).join(" AND ")};
-END
-				`)
-			}
-
-			if (topts.initData) {
-				topts.initData.forEach(insert)
-			}
-
+			return items.map(transformRow)
 		}
 
 		// TODO: transform types?
 		function select<D2 = D>(opts: SelectOpts = {}): D2[] {
 			const vars = {}
-			if (topts.paranoid) {
+			if (isParanoid) {
 				opts.where = {
 					...(opts.where ?? {}),
 					"time_deleted": { op: "IS NULL" },
@@ -1405,7 +1311,7 @@ END
 						})
 						.join(", ")
 				}
-				const items = compile(`
+				const items = bdb.query(`
 SELECT${opts.distinct ? " DISTINCT" : ""} ${colNames(tableName, opts.columns)}, ${opts.join.map((j) => colNames(j.table.name, j.columns)).join(", ")}
 FROM ${tableName}
 ${opts.join.map((j) => `${j.join ? j.join.toUpperCase() + " " : ""}JOIN ${j.table.name} ON ${j.table.name}.${j.on.column} = ${j.on.matchTable.name}.${j.on.matchColumn}`).join("\n")}
@@ -1413,7 +1319,7 @@ ${opts.where ? genWhereSQL(opts.where, vars) : ""}
 				`).all(vars) ?? []
 				return items as D2[]
 			}
-			const items = compile(`
+			const items = bdb.query(`
 SELECT${opts.distinct ? " DISTINCT" : ""} ${genColumnNameSQL(opts.columns)}
 FROM ${tableName}
 ${opts.where ? genWhereSQL(opts.where, vars) : ""}
@@ -1421,14 +1327,18 @@ ${opts.order ? genOrderSQL(opts.order) : ""}
 ${opts.limit ? genLimitSQL(opts.limit, vars) : ""}
 ${opts.offset ? genOffsetSQL(opts.offset, vars) : ""}
 			`).all(vars) ?? []
-			return transformItems(items) as D2[]
+			return transformRows(items) as D2[]
 		}
 
 		function count(where?: WhereCondition) {
 			const vars = {}
-			const sql = `SELECT COUNT(*) FROM ${tableName} ${where ? genWhereSQL(where, vars) : ""}`
+			const stmt = bdb.query(`
+SELECT COUNT(*) as count
+FROM ${tableName}
+${where ? genWhereSQL(where, vars) : ""}
+			`)
 			// @ts-ignore
-			return Number(compile(sql).all(vars)[0]["COUNT(*)"])
+			return Number(stmt.get(vars)["count"])
 		}
 
 		function findAll<D2 = D>(where: WhereCondition): D2[] {
@@ -1447,17 +1357,17 @@ ${opts.offset ? genOffsetSQL(opts.offset, vars) : ""}
 		// TODO: join
 		function search(text: string) {
 			const sql = `SELECT * FROM ${tableName}_fts WHERE ${tableName}_fts MATCH $query ORDER BY rank`
-			return compile(sql).all({
+			return bdb.query(sql).all({
 				"$query": text,
 			}) as D[] ?? []
 		}
 
 		function insert(data: D) {
 			if (!data) {
-				throw new Error("Cannot INSERT into database without table / data")
+				throw new Error("cannot INSERT into database without table / data")
 			}
 			const vars = {}
-			compile(`
+			bdb.query(`
 INSERT INTO ${tableName} (${Object.keys(data).join(", ")})
 ${genValuesSQL(data, vars)}
 			`).run(vars)
@@ -1466,7 +1376,7 @@ ${genValuesSQL(data, vars)}
 		function update(data: Partial<D>, where: WhereCondition) {
 			const vars = {}
 			const keys = Object.keys(data)
-			compile(`
+			bdb.query(`
 UPDATE ${tableName}
 ${genSetSQL(data as DBData, vars)}
 ${genWhereSQL(where, vars)}
@@ -1474,27 +1384,25 @@ ${genWhereSQL(where, vars)}
 		}
 
 		function clear() {
-			compile(`
-DELETE FROM ${tableName}
-			`).run()
+			bdb.run(`DELETE FROM ${tableName}`)
 		}
 
 		function remove(where: WhereCondition) {
 			const vars = {}
-			if (topts.paranoid) {
+			if (isParanoid) {
 				// @ts-ignore
 				update({
 					"time_deleted": "CURRENT_TIMESTAMP",
 				}, where)
 			} else {
-				compile(`
+				bdb.query(`
 DELETE FROM ${tableName}
 ${genWhereSQL(where, vars)}
 				`).run(vars)
 			}
 		}
 
-		const t =  {
+		return {
 			name: tableName,
 			select,
 			find,
@@ -1505,18 +1413,128 @@ ${genWhereSQL(where, vars)}
 			search,
 			delete: remove,
 			clear,
-			schema,
 		}
 
-		tables[tableName] = t
+	}
 
-		return t
+	function createTable<D extends DBData>(
+		tableName: string,
+		schema: TableSchema,
+		topts: TableOpts<D> = {}
+	): Table<D> {
+		if (tableName.endsWith("_fts")) {
+			throw new Error("cannot manually operate a fts table")
+		}
+		bdb.run(`
+CREATE TABLE ${tableName} (
+${genColumnsSQL({
+...schema,
+...(topts.timeCreated ? {
+"time_created": { type: "TEXT", default: "CURRENT_TIMESTAMP" },
+} : {}),
+...(topts.timeUpdated ? {
+"time_updated": { type: "TEXT", default: "CURRENT_TIMESTAMP" },
+} : {}),
+...(topts.paranoid ? {
+"time_deleted": { type: "TEXT", allowNull: true },
+} : {}),
+})}
+)
+		`)
+		const pks = []
+		const fts = []
+		for (const colName in schema) {
+			const config = schema[colName]
+			if (config.primaryKey) {
+				pks.push(colName)
+			}
+			if (config.index) {
+				bdb.run(`
+CREATE INDEX idx_${tableName}_${colName} ON ${tableName}(${colName})
+				`)
+			}
+			if (config.fts) {
+				fts.push(colName)
+			}
+		}
+		if (topts.timeUpdated) {
+			if (pks.length === 0) {
+				throw new Error("time updated requires primary key")
+			}
+			bdb.run(`
+CREATE TRIGGER trigger_${tableName}_time_updated
+AFTER UPDATE ON ${tableName}
+BEGIN
+UPDATE ${tableName}
+SET time_updated = CURRENT_TIMESTAMP
+WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
+END
+			`)
+		}
+		if (fts.length > 0) {
+			// TODO: content / content_rowid?
+			bdb.run(`
+CREATE VIRTUAL TABLE ${tableName}_fts USING fts5 (${[...pks, ...fts].join(", ")})
+		`)
+		bdb.run(`
+CREATE TRIGGER trigger_${tableName}_fts_insert
+AFTER INSERT ON ${tableName}
+BEGIN
+INSERT INTO ${tableName}_fts (${[...pks, ...fts].join(", ")})
+VALUES (${[...pks, ...fts].map((c) => `NEW.${c}`).join(", ")});
+END
+			`)
+			bdb.run(`
+CREATE TRIGGER trigger_${tableName}_fts_update
+AFTER UPDATE ON ${tableName}
+BEGIN
+UPDATE ${tableName}_fts
+SET ${fts.map((c) => `${c} = NEW.${c}`).join(", ")}
+WHERE ${pks.map((pk) => `${pk} = NEW.${pk}`).join(" AND ")};
+END
+			`)
+			bdb.run(`
+CREATE TRIGGER trigger_${tableName}_fts_delete
+AFTER DELETE ON ${tableName}
+BEGIN
+DELETE FROM ${tableName}_fts
+WHERE ${pks.map((pk) => `${pk} = OLD.${pk}`).join(" AND ")};
+END
+			`)
+		}
+		const table = getTable<D>(tableName)
+		if (topts.initData) {
+			for (const row of topts.initData) {
+				table.insert(row)
+			}
+		}
+		return table
+	}
 
+	function dropTable(name: string) {
+		bdb.run(`DROP TABLE ${name}`)
+	}
+
+	function table<D extends Record<string, any>>(
+		tableName: string,
+		schema: TableSchema,
+		topts: TableOpts<D> = {}
+	): Table<D> {
+		const exists = bdb.query(`
+SELECT name FROM sqlite_master WHERE type='table' AND name='${tableName}'
+		`).get()
+		if (exists) {
+			return getTable(tableName)
+		} else {
+			return createTable(tableName, schema, topts)
+		}
 	}
 
 	return {
 		table,
 		getTable,
+		createTable,
+		dropTable,
 		transaction,
 		close: bdb.close,
 		serialize: bdb.serialize,
@@ -2026,12 +2044,12 @@ export async function js(p: string) {
 	})
 	if (res.success) {
 		if (res.outputs.length !== 1) {
-			throw new Error(`Expected 1 output, found ${res.outputs.length}`)
+			throw new Error(`cxpected 1 output, found ${res.outputs.length}`)
 		}
 		return await res.outputs[0].text()
 	} else {
 		console.log(res.logs[0])
-		throw new Error("Failed to build js")
+		throw new Error("cailed to build js")
 	}
 }
 

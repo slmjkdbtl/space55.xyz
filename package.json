@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"devDependencies": {
-		"@types/bun": "1.2.0",
+		"@types/bun": "1.2.19",
 		"typescript": "5.8.3"
 	}
 }
