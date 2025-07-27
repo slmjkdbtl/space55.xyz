@@ -13,16 +13,17 @@ import {
 	MONTH,
 	HOUR,
 	fmtBytes,
+	createRouter,
 } from "./www"
 import type { Handler } from "./www"
-
-// TODO: be able to mount on any endpoint
 
 const MAX_SIZE = MB * 64
 const EXPIRE_TIME = MONTH * 30
 
 const TOKEN = Bun.env["TOKEN"]
 const db = await createDatabase(dbPath("space55.xyz", "tmp.db"))
+
+const router = createRouter()
 
 type DBFile = {
 	id: string,
@@ -43,31 +44,6 @@ const dataTable = db.table<DBFile>("data", {
 	timeUpdated: true,
 })
 
-const gate = (handler: Handler): Handler => {
-	return (ctx) => {
-		const { req, res } = ctx
-		const auth = req.headers.get("Authorization")
-		if (auth !== `Bearer ${TOKEN}`) {
-			throw new HTTPError(401, "nope")
-		}
-		return handler(ctx)
-	}
-}
-
-export const download: Handler = (ctx) => {
-	const { req, res } = ctx
-	const id = req.params["id"]
-	const file = dataTable.find({ id: id })
-	if (!file) {
-		throw new HTTPError(404, "not found")
-	}
-	res.send(file["data"], {
-		headers: {
-			"Content-Type": file["type"],
-		}
-	})
-}
-
 function appendCharsetUTF8(mime: string): string {
 	const lower = mime.toLowerCase()
 	if (
@@ -79,7 +55,32 @@ function appendCharsetUTF8(mime: string): string {
 	return mime
 }
 
-export const upload: Handler = gate(async (ctx) => {
+const gate = (handler: Handler): Handler => {
+	return (ctx) => {
+		const { req, res } = ctx
+		const auth = req.headers.get("Authorization")
+		if (auth !== `Bearer ${TOKEN}`) {
+			throw new HTTPError(401, "nope")
+		}
+		return handler(ctx)
+	}
+}
+
+router.add("GET", "/:id", async (ctx) => {
+	const { req, res } = ctx
+	const id = req.params["id"]
+	const file = dataTable.find({ id: id })
+	if (!file) {
+		throw new HTTPError(404, "not found")
+	}
+	res.send(file["data"], {
+		headers: {
+			"Content-Type": file["type"],
+		}
+	})
+})
+
+router.add("POST", "/", gate(async (ctx) => {
 	const { req, res } = ctx
 	let contentLength = Number(req.headers.get("Content-Length"))
 	if (!contentLength || contentLength > MAX_SIZE) {
@@ -131,29 +132,22 @@ export const upload: Handler = gate(async (ctx) => {
 		return id
 	})()
 	res.sendText(`${req.url.protocol}//${req.url.host}${req.url.pathname}/${id}`)
-})
+}))
 
-export const purge: Handler = gate((ctx) => {
+router.add("DELETE", "/", gate(async (ctx) => {
 	const { req, res } = ctx
 	dataTable.clear()
 	res.sendText("ok")
-})
+}))
 
-export const remove: Handler = gate((ctx) => {
+router.add("DELETE", "/:id", gate(async (ctx) => {
 	const { req, res } = ctx
 	const id = req.params["id"]
 	dataTable.delete({ id: id })
 	res.sendText("ok")
-})
+}))
 
-export const browse: Handler = (ctx) => {
-	// TODO
-	const { req, res } = ctx
-	const files = dataTable.select()
-	res.sendText("TODO")
-}
-
-export function removeExpired() {
+function removeExpired() {
 	const files = dataTable.select()
 	const now = new Date().getTime()
 	for (const file of files) {
@@ -166,4 +160,11 @@ export function removeExpired() {
 	}
 }
 
-export const runCleaner = () => setInterval(removeExpired, HOUR)
+function daemon() {
+	setInterval(removeExpired, HOUR)
+}
+
+export {
+	router,
+	daemon,
+}

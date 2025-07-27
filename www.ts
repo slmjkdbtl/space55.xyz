@@ -53,7 +53,7 @@ export type SendFileOpt = ResOpt & {
 	mimes?: Record<string, string>,
 }
 
-export type Ctx = {
+export type ServerCtx = {
 	req: Req,
 	res: Res,
 	next: () => void,
@@ -62,9 +62,9 @@ export type Ctx = {
 	onError: (action: (e: Error) => void) => void,
 }
 
-export type Handler = (ctx: Ctx) => void | Promise<void>
-export type ErrorHandler = (ctx: Ctx, err: Error) => void
-export type NotFoundHandler = (ctx: Ctx) => void
+export type Handler = (ctx: ServerCtx) => void | Promise<void>
+export type ErrorHandler = (ctx: ServerCtx, err: Error) => void
+export type NotFoundHandler = (ctx: ServerCtx) => void
 
 export class Registry<T> extends Map<number, T> {
 	private lastID: number = 0
@@ -357,7 +357,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 			function next() {
 				if (done) return
 				const h = curHandlers.shift()
-				const ctx: Ctx = {
+				const ctx: ServerCtx = {
 					req,
 					res,
 					next,
@@ -477,28 +477,95 @@ export function overload4<
 	}) as A & B & C & D
 }
 
-export const route = overload2((pat: string, handler: Handler): Handler => {
-	return (ctx) => {
-		const match = matchPath(pat, decodeURI(ctx.req.url.pathname))
-		if (match) {
-			ctx.req.params = match
-			return handler(ctx)
-		} else {
-			ctx.next()
+export function matchPath(pat: string, url: string): Record<string, string> | null {
+
+	pat = pat.replace(/\/$/, "")
+	url = url.replace(/\/$/, "")
+
+	console.log(pat, url)
+
+	if (pat === url) return {}
+
+	const vars = pat.match(/:[^\/]+/g) || []
+	let regStr = pat
+
+	for (const v of vars) {
+		const name = v.substring(1)
+		regStr = regStr.replace(v, `(?<${name}>[^\/]+)`)
+	}
+
+	regStr = "^" + regStr + "$"
+
+	const reg = new RegExp(regStr)
+	const matches = reg.exec(url)
+
+	if (matches) {
+		return { ...matches.groups }
+	} else {
+		return null
+	}
+
+}
+
+type HTTPMethod =
+	| "GET"
+	| "HEAD"
+	| "POST"
+	| "PUT"
+	| "DELETE"
+	| "CONNECT"
+	| "OPTIONS"
+	| "TRACE"
+	| "PATCH"
+
+type Router = {
+	add: (method: HTTPMethod, path: string, handler: Handler) => void,
+	mount: (prefix?: string) => Handler,
+}
+
+type RouteDef = {
+	method: HTTPMethod,
+	path: string,
+	handler: Handler,
+}
+
+export function createRouter(): Router {
+	const routes: RouteDef[] = []
+	function add(method: HTTPMethod, path: string, handler: Handler) {
+		routes.push({
+			path: path,
+			method: method,
+			handler: handler,
+		})
+	}
+	function mount(prefix: string = ""): Handler {
+		return (ctx) => {
+			const { req, res, next } = ctx
+			const method = req.method.toUpperCase()
+			for (const route of routes) {
+				if (route.method.toUpperCase() !== method) {
+					continue
+				}
+				const match = matchPath(prefix + route.path, decodeURI(req.url.pathname))
+				if (match) {
+					ctx.req.params = match
+					return route.handler(ctx)
+				}
+			}
+			next()
 		}
 	}
-}, (method: string, pat: string, handler: Handler): Handler => {
-	return (ctx) => {
-		let rm = ctx.req.method.toUpperCase()
-		rm = rm === "HEAD" ? "GET" : rm
-		const m = method.toUpperCase()
-		if (rm === m) {
-			return route(pat, handler)(ctx)
-		} else {
-			ctx.next()
-		}
+	return {
+		add,
+		mount,
 	}
-})
+}
+
+export const route = (method: HTTPMethod, path: string, handler: Handler) => {
+	const r = createRouter()
+	r.add(method, path, handler)
+	return r.mount()
+}
 
 const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
 const parentPath = (p: string, sep = "/") => p.split(sep).slice(0, -1).join(sep)
@@ -973,34 +1040,6 @@ export async function logger(opts: LoggerOpts = {}): Promise<Handler> {
 		})
 		return next()
 	}
-}
-
-export function matchPath(pat: string, url: string): Record<string, string> | null {
-
-	pat = pat.replace(/\/$/, "")
-	url = url.replace(/\/$/, "")
-
-	if (pat === url) return {}
-
-	const vars = pat.match(/:[^\/]+/g) || []
-	let regStr = pat
-
-	for (const v of vars) {
-		const name = v.substring(1)
-		regStr = regStr.replace(v, `(?<${name}>[^\/]+)`)
-	}
-
-	regStr = "^" + regStr + "$"
-
-	const reg = new RegExp(regStr)
-	const matches = reg.exec(url)
-
-	if (matches) {
-		return { ...matches.groups }
-	} else {
-		return null
-	}
-
 }
 
 export type ColumnType =
