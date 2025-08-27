@@ -8,6 +8,7 @@ import index from "./index"
 import poop from "./poop"
 import days from "./days"
 import resume from "./resume"
+import service from "./service"
 import * as tmp from "./tmp"
 
 const server = createServer()
@@ -24,6 +25,6 @@ server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
-server.use(route("GET", "/portfolio", ({ res }) => res.sendHTML(resume)))
+server.use(route("GET", "/service", ({ res }) => res.sendHTML(service)))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), 303)))
 server.use(tmp.router.mount("/tmp"))

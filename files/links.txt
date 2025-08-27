@@ -163,6 +163,7 @@ http://www.smspower.org/meka
 http://www.spheresofchaos.com/index.php
 http://www.spudguns.org/
 http://www.stupidhackathon.com
+http://www.t-chest.jp/shimoda/utakotoba/
 http://www.textfiles.com
 http://www.textfiles.com/underconstruction/
 http://www.thutran.com
@@ -214,6 +215,7 @@ https://chronoforest.ytmnd.com
 https://cicadamarionette.com
 https://cicadamarionette.com/Games/CryptWorlds/Main.html
 https://ciechanow.ski/bicycle
+https://cloudgazing.online/
 https://compu-lsd.com
 https://compudanzas.net
 https://cooltext.com
@@ -224,6 +226,7 @@ https://davidmenestres.com/2013/07/sun-ra-charts
 https://deat.tk/jazz2
 https://derpcart.com
 https://downloads.khinsider.com
+https://drawafish.com/
 https://drrak.github.io/ultima4
 https://dwarffortresswiki.org/Tileset_repository#8.C3.978
 https://eatshit.life
@@ -249,6 +252,7 @@ https://geocities.restorativland.org
 https://gifcities.org
 https://gifypet.neocities.org
 https://gopher.commons.host
+https://gpx.plus/
 https://hellokittyworld.tripod.com/about.htm
 https://hiddenpalace.org
 https://href.cool
@@ -273,6 +277,7 @@ https://matthewrayfield.com/
 https://matthewrayfield.com/goodies/popup-trombone/
 https://maxbittker.com
 https://mednafen.github.io
+https://melonking.net/melon
 https://minnakikeru.com/
 https://monsterbrains.blogspot.com
 https://mother3.fobby.net
@@ -354,6 +359,7 @@ https://web.archive.org/web/20170325000321/http://www.templeos.org/Wb/Doc/HolyC.
 https://web.stanford.edu/class/history34q/readings/textualizingscience/library_of_babel.html
 https://wiby.me
 https://wiki.wetfish.net
+https://wiki.xxiivv.com/site/solresol.html
 https://wiki.xxiivv.com/site/uxn.html
 https://worldwideweb.cern.ch
 https://www-ui.is.s.u-tokyo.ac.jp/~takeo/chameleon/chameleon.htm
@@ -395,6 +401,7 @@ https://www.filfre.net
 https://www.flickgame.org
 https://www.foldnfly.com/#/1-1-1-1-1-1-1-1-2
 https://www.fourjobfiesta.com
+https://www.funnyharp.com/
 https://www.geocities.ws/ratusnorvegicus/
 https://www.glorioustrainwrecks.com
 https://www.glorioustrainwrecks.com/node/10240
@@ -415,6 +422,7 @@ https://www.lowtechmagazine.com
 https://www.magicmouse.com/h_flyingc.html
 https://www.markermusic.com/
 https://www.marxists.org/
+https://www.mathpages.com/
 https://www.milfordgraves.com
 https://www.mit.edu/~xela/tao.html
 https://www.models-resource.com
@@ -428,6 +436,7 @@ https://www.nova-cinema.org/prog/2014/142/japanese-red-cinema
 https://www.npr.org/series/99077537/funk-archaeology
 https://www.offnote.org
 https://www.offnote.org/
+https://www.omniglot.com/index.htm
 https://www.openbsd.org
 https://www.pagat.com
 https://www.paradisehotel51.com/sin/

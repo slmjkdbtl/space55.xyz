@@ -212,6 +212,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 		},
 	}
 
+	// TODO: make all next() await so middlewares like logger are easier
 	async function fetch(bunReq: Request): Promise<Response> {
 		return new Promise((resolve) => {
 			let done = false
@@ -297,6 +298,7 @@ export function createServer(opts: ServerOpts = {}): Server {
 
 			function sendFile(p: string, opt: SendFileOpt = {}) {
 				const file = Bun.file(p)
+				// TODO: use file.exists()
 				if (file.size === 0) {
 					throw new HTTPError(404, "not found")
 				}
@@ -482,8 +484,6 @@ export function matchPath(pat: string, url: string): Record<string, string> | nu
 	pat = pat.replace(/\/$/, "")
 	url = url.replace(/\/$/, "")
 
-	console.log(pat, url)
-
 	if (pat === url) return {}
 
 	const vars = pat.match(/:[^\/]+/g) || []
@@ -519,19 +519,19 @@ type HTTPMethod =
 	| "PATCH"
 
 type Router = {
-	add: (method: HTTPMethod, path: string, handler: Handler) => void,
+	add: (method: HTTPMethod | "*", path: string, handler: Handler) => void,
 	mount: (prefix?: string) => Handler,
 }
 
 type RouteDef = {
-	method: HTTPMethod,
+	method: HTTPMethod | "*",
 	path: string,
 	handler: Handler,
 }
 
 export function createRouter(): Router {
 	const routes: RouteDef[] = []
-	function add(method: HTTPMethod, path: string, handler: Handler) {
+	function add(method: HTTPMethod | "*", path: string, handler: Handler) {
 		routes.push({
 			path: path,
 			method: method,
@@ -543,7 +543,10 @@ export function createRouter(): Router {
 			const { req, res, next } = ctx
 			const method = req.method.toUpperCase()
 			for (const route of routes) {
-				if (route.method.toUpperCase() !== method) {
+				if (
+					route.method !== "*" &&
+					route.method.toUpperCase() !== method
+				) {
 					continue
 				}
 				const match = matchPath(prefix + route.path, decodeURI(req.url.pathname))
@@ -568,7 +571,6 @@ export const route = (method: HTTPMethod, path: string, handler: Handler) => {
 }
 
 const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
-const parentPath = (p: string, sep = "/") => p.split(sep).slice(0, -1).join(sep)
 
 export async function mapAsync<T, U>(
 	arr: T[],
@@ -716,7 +718,7 @@ export function filebrowser(route = "", root = ""): Handler {
 			h("body", {}, [
 				h("ul", { id: "tree", class: "box", tabindex: 0 }, [
 					...(isRoot ? [] : [
-						h("a", { href: `/${await resolveDefFile(parentPath(diskPath))}`, }, ".."),
+						h("a", { href: `/${await resolveDefFile(path.dirname(diskPath))}`, }, ".."),
 					]),
 					...await mapAsync(dirs, async (d: string) => h("li", {}, [
 						h("a", { href: `/${await resolveDefFile(`${diskPath}/${d}`)}`, }, d + "/"),
@@ -1624,8 +1626,8 @@ export function kvList(props: Record<string, string | boolean | number>) {
 export async function getReqData(req: Request) {
 	const ty = req.headers.get("Content-Type")
 	if (
-		ty?.startsWith("application/x-www-form-urlencoded")
-		|| ty?.startsWith("multipart/form-data")
+		ty?.startsWith("application/x-www-form-urlencoded") ||
+		ty?.startsWith("multipart/form-data")
 	) {
 		const formData = await req.formData()
 		const json: any = {}
@@ -2083,12 +2085,12 @@ export async function js(p: string) {
 	})
 	if (res.success) {
 		if (res.outputs.length !== 1) {
-			throw new Error(`cxpected 1 output, found ${res.outputs.length}`)
+			throw new Error(`expected 1 output, found ${res.outputs.length}`)
 		}
 		return await res.outputs[0].text()
 	} else {
 		console.log(res.logs[0])
-		throw new Error("cailed to build js")
+		throw new Error("failed to build js")
 	}
 }
 
