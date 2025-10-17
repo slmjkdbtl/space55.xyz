@@ -1,6 +1,6 @@
 import * as fs from "fs"
 import * as path from "path"
-import { h, css, csslib, js } from "./www"
+import { h, css, csslib, js } from "www/html"
 
 const DIR = "files/poop"
 

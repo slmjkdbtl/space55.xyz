@@ -6,16 +6,21 @@ import * as fs from "node:fs/promises"
 import {
 	dbPath,
 	createDatabase,
+} from "www/db"
+import {
+	Handler,
+	HTTPError,
+	createRouter,
+} from "www/server"
+import {
 	randAlphaNum,
 	cron,
-	HTTPError,
 	MB,
 	MONTH,
 	HOUR,
 	fmtBytes,
-	createRouter,
-} from "./www"
-import type { Handler } from "./www"
+} from "www/utils"
+// import type { Handler } from "./www"
 
 const MAX_SIZE = MB * 64
 const EXPIRE_TIME = MONTH * 30

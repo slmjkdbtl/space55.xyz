@@ -1,4 +1,4 @@
-import { h, css, csslib } from "./www"
+import { h, css, csslib } from "www/html"
 import scripts from "./scripts"
 
 const games = [

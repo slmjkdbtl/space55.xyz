@@ -3,12 +3,12 @@ import {
 	files,
 	filebrowser,
 	route,
-} from "./www"
+} from "www/server"
 import index from "./index"
 import poop from "./poop"
 import days from "./days"
 import resume from "./resume"
-import service from "./service"
+import littlesongs from "./littlesongs"
 import * as tmp from "./tmp"
 
 const server = createServer()
@@ -25,6 +25,6 @@ server.use(route("GET", "/", ({ res }) => res.sendHTML(index)))
 server.use(route("GET", "/poop", ({ res }) => res.sendHTML(poop)))
 server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
-server.use(route("GET", "/service", ({ res }) => res.sendHTML(service)))
+server.use(route("GET", "/littlesongs", ({ res }) => res.sendHTML(littlesongs)))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links), 303)))
 server.use(tmp.router.mount("/tmp"))
