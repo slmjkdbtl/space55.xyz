@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
-import { h, css, csslib, js } from "www/html"
+import { h, css, csslib, } from "www/html"
+import scripts from "./scripts"
 
 const DIR = "files/poop"
 
@@ -61,6 +62,6 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				])
 			})),
 		]),
-		h("script", {}, await js("client/poop.ts")),
+		h("script", {}, scripts.poop),
 	]),
 ])

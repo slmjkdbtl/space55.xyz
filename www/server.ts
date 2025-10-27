@@ -6,15 +6,6 @@ if (typeof Bun === "undefined") {
 
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
-
-import type {
-	ServeOptions,
-	SocketAddress,
-	ServerWebSocket,
-	ServerWebSocketSendStatus,
-	WebSocketHandler,
-} from "bun"
-
 import * as sqlite from "bun:sqlite"
 
 import {
@@ -27,15 +18,10 @@ import {
 	fmtBytes,
 	mapAsync,
 	isPromise,
+	KV,
+	parseKV,
+	buildKV,
 } from "./utils"
-
-import type {
-	Table,
-} from "./db"
-
-import {
-	createDatabase,
-} from "./db"
 
 import {
 	h,
@@ -47,26 +33,31 @@ export type Req = {
 	method: string,
 	headers: Headers,
 	url: URL,
-	params: Record<string, string>,
+	type: string | null,
+	cookies: KV,
 	text: () => Promise<string>,
 	arrayBuffer: () => Promise<ArrayBuffer>,
 	json<T = any>(): Promise<T>,
 	formData: () => Promise<FormData>,
 	blob: () => Promise<Blob>,
-	getIP: () => string | null,
-	getCookies: () => Record<string, string>,
+	params: Record<string, string>,
+	ip: string | void,
+	getBasicAuth: () => [string, string] | void,
+	getBearerAuth: () => string | void,
 }
 
 export type Res = {
-	headers: Headers,
 	status: number,
+	headers: Headers,
 	body: null | BodyInit,
+	cookies: KV,
 	send: (data?: BodyInit | null, opt?: ResOpt) => void,
 	sendText: (content: string, opt?: ResOpt) => void,
 	sendHTML: (content: string, opt?: ResOpt) => void,
 	sendJSON: <T = any>(content: T, opt?: ResOpt) => void,
-	sendFile: (path: string, opt?: ResOpt) => void,
-	redirect: (url: string, status?: number) => void,
+	sendFile: (path: string, opt?: SendFileOpt & ResOpt) => void,
+	redirect: (url: string, opt?: RedirectOpt & ResOpt) => void,
+	handled: boolean,
 }
 
 export type ResOpt = {
@@ -74,57 +65,33 @@ export type ResOpt = {
 	status?: number,
 }
 
-export type SendFileOpt = ResOpt & {
+export type SendFileOpt = {
 	mimes?: Record<string, string>,
 }
 
-export type ServerCtx = {
-	req: Req,
-	res: Res,
-	next: () => void,
-	upgrade: (opts?: ServerUpgradeOpts) => boolean,
-	onFinish: (action: () => void) => void,
-	onError: (action: (e: Error) => void) => void,
+export type RedirectOpt = {
+	permanent?: boolean,
+	switchToGet?: boolean,
 }
 
-export type Handler = (ctx: ServerCtx) => void | Promise<void>
-export type ErrorHandler = (ctx: ServerCtx, err: Error) => void
-export type NotFoundHandler = (ctx: ServerCtx) => void
+export type Ctx = {
+	req: Req,
+	res: Res,
+}
+
+export type Handler = (ctx: Ctx, next: () => Promise<void>) => void | Promise<void>
+export type ErrorHandler = (ctx: Ctx, err: Error) => void
 
 export type Server = {
 	use: (handler: Handler) => void,
 	error: (handler: ErrorHandler) => void,
-	notFound: (action: NotFoundHandler) => void,
-    stop: (closeActiveConnections?: boolean) => void,
-	hostname: string | undefined,
 	url: URL,
-	port: number | undefined,
-	ws: {
-		clients: Map<string, WebSocket>,
-		onMessage: (action: (ws: WebSocket, msg: string | Buffer) => void) => EventController,
-		onOpen: (action: (ws: WebSocket) => void) => EventController,
-		onClose: (action: (ws: WebSocket) => void) => EventController,
-		publish: (
-			topic: string,
-			data: string | DataView | ArrayBuffer | SharedArrayBuffer,
-			compress?: boolean,
-		) => ServerWebSocketSendStatus,
-	},
 }
 
 export type ServerOpts = {
 	hostname?: string,
 	port?: number,
-	idleTimeout?: number,
 }
-
-export type ServerUpgradeOpts<T = undefined> = {
-	headers?: HeadersInit,
-	data?: T,
-}
-
-// TODO: support arbituary data
-export type WebSocket = ServerWebSocket
 
 // TODO: can pass a full Response
 export class HTTPError extends Error {
@@ -136,223 +103,182 @@ export class HTTPError extends Error {
 	}
 }
 
-export function createServer(opts: ServerOpts = {}): Server {
+function createReq(req: Request, server: Bun.Server<any>): Req {
 
-	const wsClients = new Map<string, WebSocket>()
-	const wsEvents = {
-		message: new Event<[WebSocket, string | Buffer]>(),
-		open: new Event<WebSocket>(),
-		close: new Event<WebSocket>(),
-	}
-	const websocket: WebSocketHandler<undefined> = {
-		message: (ws, msg) => {
-			wsEvents.message.trigger([ws, msg])
-		},
-		open: (ws) => {
-			wsEvents.open.trigger(ws)
-		},
-		close: (ws) => {
-			wsEvents.close.trigger(ws)
-		},
-	}
+	const cookieStr = req.headers.get("Cookie")
+	const cookies = cookieStr ? parseKV(cookieStr) : {}
+	const ty = req.headers.get("Content-Type")?.split(";")[0] ?? null
 
-	// TODO: make all next() await so middlewares like logger are easier
-	async function fetch(bunReq: Request): Promise<Response> {
-		return new Promise((resolve) => {
-			let done = false
-			const req: Req = {
-				method: bunReq.method,
-				url: new URL(bunReq.url),
-				headers: bunReq.headers,
-				params: {},
-				text: bunReq.text.bind(bunReq),
-				json: bunReq.json.bind(bunReq),
-				arrayBuffer: bunReq.arrayBuffer.bind(bunReq),
-				formData: bunReq.formData.bind(bunReq),
-				blob: bunReq.blob.bind(bunReq),
-				getIP: () => {
-					let ip = bunReq.headers.get("X-Forwarded-For")?.split(",")[0].trim()
-						?? bunServer.requestIP(bunReq)?.address
-					if (!ip) return null
-					const ipv6Prefix = "::ffff:"
-					// ipv4 in ipv6
-					if (ip?.startsWith(ipv6Prefix)) {
-						ip = ip.substring(ipv6Prefix.length)
-					}
-					const localhostIPs = new Set([
-						"127.0.0.1",
-						"::1",
-					])
-					if (localhostIPs.has(ip)) return null
-					return ip
-				},
-				getCookies: () => {
-					const str = bunReq.headers.get("Cookie")
-					if (!str) return {}
-					const cookies: Record<string, string> = {}
-					for (const c of str.split(";")) {
-						const [k, v] = c.split("=")
-						cookies[k.trim()] = v.trim()
-					}
-					return cookies
-				},
-			}
-
-			const onFinishEvents: Array<() => void> = []
-			const onErrorEvents: Array<(e: Error) => void> = []
-			let headers = new Headers()
-			let status = 200
-			let body: null | BodyInit = null
-
-			function send(b?: BodyInit | null, opt: ResOpt = {}) {
-				if (done) return
-				body = b ?? body
-				status = opt.status ?? status
-				if (opt.headers) {
-					for (const k in opt.headers) {
-						headers.set(k, opt.headers[k])
-					}
-				}
-				const bunRes = new Response(body, {
-					headers: headers,
-					status: status,
-				})
-				if (bunReq.method.toUpperCase() === "HEAD") {
-					// TODO
-				}
-				resolve(bunRes)
-				done = true
-				onFinishEvents.forEach((f) => f())
-			}
-
-			function sendText(content: string, opt: ResOpt = {}) {
-				headers.set("Content-Type", "text/plain; charset=utf-8")
-				send(content, opt)
-			}
-
-			function sendHTML(content: string, opt: ResOpt = {}) {
-				headers.set("Content-Type", "text/html; charset=utf-8")
-				send(content, opt)
-			}
-
-			function sendJSON(content: unknown, opt: ResOpt = {}) {
-				headers.set("Content-Type", "application/json; charset=utf-8")
-				send(JSON.stringify(content), opt)
-			}
-
-			function sendFile(p: string, opt: SendFileOpt = {}) {
-				const file = Bun.file(p)
-				// TODO: use file.exists()
-				if (file.size === 0) {
-					throw new HTTPError(404, "not found")
-				}
-				const range = bunReq.headers.get("Range")
-				if (range) {
-					let [start, end] = range
-						.replace("bytes=", "")
-						.split("-")
-						.map((x) => parseInt(x, 10))
-					if (isNaN(start)) start = 0
-					if (isNaN(end)) end = file.size - 1
-					if (
-						start < 0 || start >= file.size ||
-						end < 0 || end >= file.size ||
-						start > end
-					) {
-						throw new HTTPError(416, "invalid range")
-					}
-					headers.set("Content-Range", `bytes ${start}-${end}/${file.size}`)
-					headers.set("Content-Length", "" + (end - start + 1))
-					headers.set("Accept-Ranges", "bytes")
-					return send(file.slice(start, end + 1), {
-						...opt,
-						status: 206,
-					})
-				}
-				const mtimeServer = req.headers.get("If-Modified-Since")
-				const mtimeClient = toHTTPDate(new Date(file.lastModified))
-				if (mtimeServer === mtimeClient) {
-					return send(null, { status: 304 })
-				}
-				headers.set("Last-Modified", mtimeClient)
-				headers.set("Cache-Control", "no-cache")
-				return send(file, opt)
-			}
-
-			function redirect(url: string, s: number = 302) {
-				headers.set("Location", url)
-				status = s
-				send(null)
-			}
-
-			const res: Res = {
-				get status() { return status },
-				set status(s) { status = s },
-				get body() { return body },
-				set body(b) { body = b },
-				headers,
-				send,
-				sendText,
-				sendHTML,
-				sendJSON,
-				sendFile,
-				redirect,
-			}
-
-			const curHandlers = [...handlers]
-
-			function next() {
-				if (done) return
-				const h = curHandlers.shift()
-				const ctx: ServerCtx = {
-					req,
-					res,
-					next,
-					upgrade: (opts) => {
-						const success = bunServer.upgrade(bunReq)
-						// @ts-ignore
-						if (success) resolve()
-						return success
-					},
-					onFinish(action) {
-						onFinishEvents.push(action)
-					},
-					onError(action) {
-						onErrorEvents.push(action)
-					},
-				}
-				if (h) {
-					try {
-						const res = h(ctx)
-						if (isPromise(res)) {
-							res.catch((e) => {
-								errHandler(ctx, e)
-								onErrorEvents.forEach((f) => f(e))
-							})
-						}
-					} catch (e) {
-						errHandler(ctx, e as Error)
-						onErrorEvents.forEach((f) => f(e as Error))
-					}
-				} else {
-					notFoundHandler(ctx)
-				}
-			}
-			next()
-		})
+	function getIP() {
+		let ip = req.headers.get("X-Forwarded-For")?.split(",")[0].trim()
+			?? server.requestIP(req)?.address
+		if (!ip) return
+		const ipv6Prefix = "::ffff:"
+		// ipv4 in ipv6
+		if (ip?.startsWith(ipv6Prefix)) {
+			ip = ip.substring(ipv6Prefix.length)
+		}
+		const localhostIPs = new Set([
+			"127.0.0.1",
+			"::1",
+		])
+		if (localhostIPs.has(ip)) return
+		return ip
 	}
 
-	const bunServer = Bun.serve({
-		port: opts.port,
-		hostname: opts.hostname ?? "::",
-		websocket,
-		fetch,
-		development: isDev,
-	})
+	function getBasicAuth(): [string, string] | void {
+		const auth = req.headers.get("Authorization")
+		if (!auth) return
+		const [ scheme, cred ] = auth.split(" ")
+		if (scheme.toLowerCase() !== "basic") return
+		if (!cred) return
+		const [ user, pass ] = atob(cred).split(":")
+		return [ user, pass ]
+	}
+
+	function getBearerAuth(): string | void {
+		const auth = req.headers.get("Authorization")
+		if (!auth) return
+		const [ scheme, cred ] = auth.split(" ")
+		if (scheme.toLowerCase() !== "bearer") return
+		return cred
+	}
+
+	return {
+		method: req.method,
+		url: new URL(req.url),
+		headers: req.headers,
+		text: req.text.bind(req),
+		json: req.json.bind(req),
+		arrayBuffer: req.arrayBuffer.bind(req),
+		formData: req.formData.bind(req),
+		blob: req.blob.bind(req),
+		cookies,
+		ip: getIP(),
+		type: ty,
+		params: {},
+		getBearerAuth,
+		getBasicAuth,
+	}
+
+}
+
+function createRes(req: Req): Res {
+
+	let status = 200
+	let body: BodyInit | null = null
+	const headers = new Headers()
+	const cookies = {}
+	let handled = false
+
+	function send(b?: BodyInit | null, opt: ResOpt = {}) {
+		body = b ?? body
+		status = opt.status ?? status
+		headers.set("Set-Cookie", buildKV(cookies))
+		if (opt.headers) {
+			for (const k in opt.headers) {
+				headers.set(k, opt.headers[k])
+			}
+		}
+		handled = true
+	}
+
+	function sendText(content: string, opt: ResOpt = {}) {
+		headers.set("Content-Type", "text/plain; charset=utf-8")
+		send(content, opt)
+	}
+
+	function sendHTML(content: string, opt: ResOpt = {}) {
+		headers.set("Content-Type", "text/html; charset=utf-8")
+		send(content, opt)
+	}
+
+	function sendJSON(content: unknown, opt: ResOpt = {}) {
+		headers.set("Content-Type", "application/json; charset=utf-8")
+		send(JSON.stringify(content), opt)
+	}
+
+	async function sendFile(p: string, opt: SendFileOpt & ResOpt = {}) {
+		const file = Bun.file(p)
+		if (!await file.exists()) {
+			throw new HTTPError(404, "not found")
+		}
+		const range = req.headers.get("Range")
+		if (range) {
+			// TODO: cache
+			let [start, end] = range
+				.replace("bytes=", "")
+				.split("-")
+				.map((x) => parseInt(x, 10))
+			if (isNaN(start)) start = 0
+			if (isNaN(end)) end = file.size - 1
+			if (
+				start < 0 || start >= file.size ||
+				end < 0 || end >= file.size ||
+				start > end
+			) {
+				throw new HTTPError(416, "invalid range")
+			}
+			headers.set("Content-Range", `bytes ${start}-${end}/${file.size}`)
+			headers.set("Content-Length", "" + (end - start + 1))
+			headers.set("Accept-Ranges", "bytes")
+			return send(file.slice(start, end + 1), {
+				...opt,
+				status: 206,
+			})
+		}
+		const mtimeServer = req.headers.get("If-Modified-Since")
+		const mtimeClient = toHTTPDate(new Date(file.lastModified))
+		if (mtimeServer === mtimeClient) {
+			return send(null, { status: 304 })
+		}
+		headers.set("Last-Modified", mtimeClient)
+		headers.set("Cache-Control", "no-cache")
+		return send(file, opt)
+	}
+
+	function redirect(url: string, opt: RedirectOpt & ResOpt = {}) {
+		if (opt.permanent) {
+			if (opt.switchToGet) {
+				status = 301
+			} else {
+				status = 308
+			}
+		} else {
+			if (opt.switchToGet) {
+				status = 303
+			} else {
+				status = 307
+			}
+		}
+		headers.set("Location", url)
+		send(null, opt)
+	}
+
+	return {
+		get status() { return status },
+		set status(s) { status = s },
+		get body() { return body },
+		set body(b) { body = b },
+		get handled() { return handled },
+		set handled(b) { handled = b },
+		headers,
+		cookies,
+		send,
+		sendText,
+		sendHTML,
+		sendJSON,
+		sendFile,
+		redirect,
+	}
+
+}
+
+export function createServer(opts: ServerOpts = {}) {
 
 	const handlers: Handler[] = []
-	const use = (handler: Handler) => handlers.push(handler)
-	let errHandler: ErrorHandler = ({ req, res, next }, err) => {
+
+	const defErrHandler: ErrorHandler = ({ req, res }, err: Error) => {
 		console.error(err)
 		if (err instanceof HTTPError) {
 			res.status = err.code
@@ -362,27 +288,59 @@ export function createServer(opts: ServerOpts = {}): Server {
 			res.sendText("500 internal server error")
 		}
 	}
-	let notFoundHandler: NotFoundHandler = ({ res }) => {
-		res.status = 404
-		res.sendText("404 not found")
+
+	let errHandler = defErrHandler
+
+	function use(handler: Handler) {
+		handlers.push(handler)
 	}
+
+	async function fetch(bunReq: Request) {
+
+		const req = createReq(bunReq, bunServer)
+		const res = createRes(req)
+		const ctx = { res, req }
+		let idx = -1
+
+		async function dispatch(i: number) {
+			if (i <= idx) throw new Error("next() called multiple times")
+			idx = i
+			const fn = handlers[i]
+			if (!fn) return
+			try {
+				await fn(ctx, () => dispatch(i + 1))
+			} catch (e) {
+				errHandler(ctx, e as Error)
+			}
+		}
+
+		await dispatch(0)
+
+		if (!res.handled) {
+			res.status = 404
+			res.body = "404 not found"
+		}
+
+		return new Response(res.body, {
+			status: res.status,
+			headers: res.headers,
+		})
+
+	}
+
+	const bunServer = Bun.serve({
+		port: opts.port,
+		hostname: opts.hostname ?? "::",
+		fetch,
+		development: isDev,
+	})
 
 	return {
 		use: use,
 		error: (action: ErrorHandler) => errHandler = action,
-		notFound: (action: NotFoundHandler) => notFoundHandler = action,
-		stop: bunServer.stop.bind(bunServer),
-		hostname: bunServer.hostname,
 		url: bunServer.url,
-		port: bunServer.port,
-		ws: {
-			clients: wsClients,
-			onMessage: (action) => wsEvents.message.add(([ws, msg]) => action(ws, msg)),
-			onOpen: (action) => wsEvents.open.add(action),
-			onClose: (action) => wsEvents.close.add(action),
-			publish: bunServer.publish.bind(bunServer),
-		},
 	}
+
 }
 
 export function matchPath(pat: string, url: string): Record<string, string> | null {
@@ -445,9 +403,12 @@ export function createRouter(): Router {
 		})
 	}
 	function mount(prefix: string = ""): Handler {
-		return (ctx) => {
-			const { req, res, next } = ctx
-			const method = req.method.toUpperCase()
+		return async (ctx, next) => {
+			const { req, res } = ctx
+			let method = req.method.toUpperCase()
+			if (method === "HEAD") {
+				method = "GET"
+			}
 			for (const route of routes) {
 				if (
 					route.method !== "*" &&
@@ -458,10 +419,10 @@ export function createRouter(): Router {
 				const match = matchPath(prefix + route.path, decodeURI(req.url.pathname))
 				if (match) {
 					ctx.req.params = match
-					return route.handler(ctx)
+					return await route.handler(ctx, next)
 				}
 			}
-			next()
+			await next()
 		}
 	}
 	return {
@@ -479,20 +440,20 @@ export const route = (method: HTTPMethod, path: string, handler: Handler) => {
 const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
 
 export function files(route = "", root = ""): Handler {
-	return ({ req, res, next }) => {
+	return async ({ req, res }, next) => {
 		route = trimSlashes(route)
 		const pathname = trimSlashes(decodeURI(req.url.pathname))
-		if (!pathname.startsWith(route)) return next()
+		if (!pathname.startsWith(route)) return await next()
 		const baseDir = "./" + trimSlashes(root)
 		const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
 		const p = path.join(baseDir, relativeURLPath)
-		return res.sendFile(p)
+		return await res.sendFile(p)
 	}
 }
 
 async function isFile(path: string) {
 	try {
-		const stat = await fs.stat(path)
+		const stat = await Bun.file(path).stat()
 		return stat.isFile()
 	} catch {
 		return false
@@ -501,7 +462,7 @@ async function isFile(path: string) {
 
 async function isDir(path: string) {
 	try {
-		const stat = await fs.stat(path)
+		const stat = await Bun.file(path).stat()
 		return stat.isDirectory()
 	} catch {
 		return false
@@ -517,14 +478,14 @@ export async function dataurl(path: string) {
 export function filebrowser(route = "", root = ""): Handler {
 	route = trimSlashes(route)
 	root = trimSlashes(root)
-	return async ({ req, res, next }) => {
+	return async ({ req, res }, next) => {
 		const urlPath = trimSlashes(decodeURIComponent(req.url.pathname))
-		if (!urlPath.startsWith(route)) return next()
+		if (!urlPath.startsWith(route)) return await next()
 		const relativeURLPath = urlPath.replace(new RegExp(`^${route}/?`), "")
 		const isRoot = relativeURLPath === ""
 		const diskPath = path.join("./" + root, relativeURLPath)
-		if (await isFile(diskPath)) return res.sendFile(diskPath)
-		if (!await isDir(diskPath)) return next()
+		if (await isFile(diskPath)) return await res.sendFile(diskPath)
+		if (!await isDir(diskPath)) return await next()
 		const entries = (await fs.readdir(diskPath))
 			.filter((entry) => !entry.startsWith("."))
 			.sort((a, b) => a > b ? -1 : 1)
@@ -549,7 +510,7 @@ export function filebrowser(route = "", root = ""): Handler {
 				}
 			}
 		}
-		async function defaultFile(p: string) {
+		async function defFile(p: string) {
 			const files = [
 				"index.html",
 				"README",
@@ -652,12 +613,12 @@ export function filebrowser(route = "", root = ""): Handler {
 				h("ul", { id: "tree", class: "box", tabindex: 0 }, [
 					...(isRoot ? [] : [
 						h("a", {
-							href: `/${path.dirname(urlPath)}${await defaultFile(path.dirname(diskPath))}`,
+							href: `/${path.dirname(urlPath)}${await defFile(path.dirname(diskPath))}`,
 						}, ".."),
 					]),
 					...await mapAsync(dirs, async (d: string) => h("li", {}, [
 						h("a", {
-							href: `/${urlPath}/${d}${await defaultFile(`${diskPath}/${d}`)}`,
+							href: `/${urlPath}/${d}${await defFile(`${diskPath}/${d}`)}`,
 						}, d + "/"),
 					])),
 					...files.map(({ name, mime }) => h("li", {}, [
@@ -750,7 +711,7 @@ async function toIdx(i) {
     const iframe = document.createElement("iframe")
     iframe.src = url
     content.append(iframe)
-  } else if (ty.startsWith("text/")) {
+  } else if (ty.startsWith("text/") || ty.includes("charset=utf-8")) {
     const res = await fetchContent()
     const p = document.createElement("p")
     p.textContent = await res.text()
@@ -816,59 +777,22 @@ if (location.hash) {
 	}
 }
 
-export type RateLimiterOpts = {
-	time: number,
-	limit: number,
-	handler: Handler,
-}
-
-export function rateLimiter(opts: RateLimiterOpts): Handler {
-	const reqCounter: Record<string, number> = {}
-	return (ctx) => {
-		const ip = ctx.req.getIP()
-		if (!ip) return ctx.next()
-		if (!(ip in reqCounter)) {
-			reqCounter[ip] = 0
-		}
-		reqCounter[ip] += 1
-		setTimeout(() => {
-			reqCounter[ip] -= 1
-			if (reqCounter[ip] === 0) {
-				delete reqCounter[ip]
-			}
-		}, opts.time * 1000)
-		if (reqCounter[ip] > opts.limit) {
-			ctx.res.status = 429
-			return opts.handler(ctx)
-		}
-		return ctx.next()
-	}
-}
-
 export function toHTTPDate(d: Date) {
 	return d.toUTCString()
 }
 
-export type LoggerOpts = {
-	filter?: (req: Req, res: Res) => boolean,
-	db?: string,
-	file?: string,
-	stdout?: boolean,
-	stderr?: boolean,
-}
-
 // TODO: is there a way to get bun calculated Content-Length result?
-// TODO: ReadableStream?
 export function getBodySize(body: BodyInit) {
 	if (typeof body === "string") {
 		return Buffer.byteLength(body)
 	} else if (body instanceof Blob) {
 		return body.size
-	} else if (body instanceof ArrayBuffer || "byteLength" in body) {
+	} else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
 		return body.byteLength
 	} else if (body instanceof URLSearchParams) {
 		return Buffer.byteLength(body.toString())
 	} else if (body instanceof FormData) {
+		// NOTE: FormData body also has boundary strings, field headers, and line breaks
 		let size = 0
 		body.forEach((v, k) => {
 			if (typeof v === "string") {
@@ -882,120 +806,36 @@ export function getBodySize(body: BodyInit) {
 	return 0
 }
 
-// TODO: can there be a onStart() to record time
-export async function logger(opts: LoggerOpts = {}): Promise<Handler> {
-	let reqTable: Table | null = null
-	if (opts.db) {
-		const db = await createDatabase(opts.db)
-		reqTable = db.table("request", {
-			"id":     { type: "INTEGER", primaryKey: true, autoIncrement: true },
-			"method": { type: "TEXT" },
-			"path":   { type: "TEXT" },
-			"params": { type: "TEXT" },
-			"ip":     { type: "TEXT", allowNull: true },
-			"err":    { type: "TEXT", allowNull: true },
-		}, {
-			timeCreated: true,
-		})
-	}
-	return ({ req, res, next, onFinish, onError }) => {
-		if (opts.filter) {
-			if (!opts.filter(req, res)) {
-				return next()
-			}
-		}
-		const genMsg = (msgOpts: {
-			color?: boolean,
-		} = {}) => {
-			const a = mapValues(ansi, (v) => {
-				if (msgOpts.color) {
-					return v
-				} else {
-					if (typeof v === "string") {
-						return ""
-					} else if (typeof v === "function") {
-						return () => ""
-					}
-					return v
-				}
-			})
-			const endTime = new Date()
-			const msg = []
-			const year = endTime.getUTCFullYear().toString().padStart(4, "0")
-			const month = (endTime.getUTCMonth() + 1).toString().padStart(2, "0")
-			const date = endTime.getUTCDate().toString().padStart(2, "0")
-			const hour = endTime.getUTCHours().toString().padStart(2, "0")
-			const minute = endTime.getUTCMinutes().toString().padStart(2, "0")
-			const seconds = endTime.getUTCSeconds().toString().padStart(2, "0")
-			// TODO: why this turns dim red for 4xx and 5xx responses?
-			msg.push(`${a.dim}[${year}-${month}-${date} ${hour}:${minute}:${seconds}]${a.reset}`)
-			const statusClor = {
-				"1": a.yellow,
-				"2": a.green,
-				"3": a.blue,
-				"4": a.red,
-				"5": a.red,
-			}[res.status.toString()[0]] ?? a.yellow
-			msg.push(`${a.bold}${statusClor}${res.status}${a.reset}`)
-			msg.push(req.method)
-			msg.push(req.url.pathname)
-			msg.push(`${a.dim}${endTime.getTime() - startTime.getTime()}ms${a.reset}`)
-			const size = res.body ? getBodySize(res.body) : 0
-			if (size) {
-				msg.push(`${a.dim}${fmtBytes(size)}${a.reset}`)
-			}
-			return msg.join(" ")
-		}
+export function logger(): Handler {
+	return async ({ req, res }, next) => {
 		const startTime = new Date()
-		onFinish(async () => {
-			if (opts.stdout !== false) {
-				console.log(genMsg({ color: true }))
-			}
-			if (opts.file) {
-				fs.appendFile(opts.file, genMsg({ color: false }) + "\n", "utf8")
-			}
-			if (reqTable) {
-				reqTable.insert({
-					"method": req.method,
-					"path": req.url.pathname,
-					"params": req.url.search,
-					"ip": req.getIP(),
-				})
-			}
-		})
-		onError((e) => {
-			if (reqTable) {
-				// TODO
-			}
-		})
-		return next()
-	}
-}
-
-export type ResponseOpts = {
-	status?: number,
-	headers?: Record<string, string>,
-}
-
-export function kvList(props: Record<string, string | boolean | number>) {
-	return Object.entries(props)
-		.filter(([k, v]) => v)
-		.map(([k, v]) => v === true ? k : `${k}=${v}`)
-		.join("; ")
-}
-
-export async function getReqData(req: Request) {
-	const ty = req.headers.get("Content-Type")
-	if (
-		ty?.startsWith("application/x-www-form-urlencoded") ||
-		ty?.startsWith("multipart/form-data")
-	) {
-		const formData = await req.formData()
-		const json: any = {}
-		formData.forEach((v, k) => json[k] = v)
-		return json
-	} else {
-		return await req.json()
+		await next()
+		const endTime = new Date()
+		const msg = []
+		const year = endTime.getUTCFullYear().toString().padStart(4, "0")
+		const month = (endTime.getUTCMonth() + 1).toString().padStart(2, "0")
+		const date = endTime.getUTCDate().toString().padStart(2, "0")
+		const hour = endTime.getUTCHours().toString().padStart(2, "0")
+		const minute = endTime.getUTCMinutes().toString().padStart(2, "0")
+		const seconds = endTime.getUTCSeconds().toString().padStart(2, "0")
+		// TODO: why this turns dim red for 4xx and 5xx responses?
+		msg.push(`${ansi.dim}[${year}-${month}-${date} ${hour}:${minute}:${seconds}]${ansi.reset}`)
+		const statusClor = {
+			"1": ansi.yellow,
+			"2": ansi.green,
+			"3": ansi.blue,
+			"4": ansi.red,
+			"5": ansi.red,
+		}[res.status.toString()[0]] ?? ansi.yellow
+		msg.push(`${ansi.bold}${statusClor}${res.status}${ansi.reset}`)
+		msg.push(req.method)
+		msg.push(req.url.pathname)
+		msg.push(`${ansi.dim}${endTime.getTime() - startTime.getTime()}ms${ansi.reset}`)
+		const size = res.body ? getBodySize(res.body) : 0
+		if (size) {
+			msg.push(`${ansi.dim}${fmtBytes(size)}${ansi.reset}`)
+		}
+		console.log(msg.join(" "))
 	}
 }
 
@@ -1003,6 +843,19 @@ export function formToJSON(form: FormData) {
 	const json: any = {}
 	form.forEach((v, k) => json[k] = v)
 	return json
+}
+
+export async function getReqJSON<T = any>(req: Request): Promise<T> {
+	const ty = req.headers.get("Content-Type")
+	if (
+		ty?.startsWith("application/x-www-form-urlencoded") ||
+		ty?.startsWith("multipart/form-data")
+	) {
+		const formData = await req.formData()
+		return formToJSON(formData)
+	} else {
+		return await req.json()
+	}
 }
 
 export function getFormText(form: FormData, key: string): string | null {
@@ -1026,22 +879,4 @@ export async function getFormBlobData(form: FormData, key: string) {
 	if (b) {
 		return new Uint8Array(await b.arrayBuffer())
 	}
-}
-
-export function getBasicAuth(req: Req): [string, string] | void {
-	const auth = req.headers.get("Authorization")
-	if (!auth) return
-	const [ scheme, cred ] = auth.split(" ")
-	if (scheme.toLowerCase() !== "basic") return
-	if (!cred) return
-	const [ user, pass ] = atob(cred).split(":")
-	return [ user, pass ]
-}
-
-export function getBearerAuth(req: Req): string | void {
-	const auth = req.headers.get("Authorization")
-	if (!auth) return
-	const [ scheme, cred ] = auth.split(" ")
-	if (scheme.toLowerCase() !== "bearer") return
-	return cred
 }

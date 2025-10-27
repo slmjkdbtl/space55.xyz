@@ -289,7 +289,7 @@ export type Vertex = {
 
 export type ImageSource = Exclude<TexImageSource, VideoFrame>
 export type TexFilter = "nearest" | "linear"
-export type TexWrap = "repeat" | "clampToEdge"
+export type TexWrap = "repeat" | "clampToEdge" | "mirroredRepeat"
 
 export type TextureOpt = {
 	filter?: TexFilter,
@@ -309,7 +309,7 @@ export type UniformKey = Exclude<string, "u_tex">
 export type Uniform = Record<UniformKey, UniformValue>
 
 export const DEF_FILTER: TexFilter = "nearest"
-export const DEF_WRAP: TexWrap = "clampToEdge"
+export const DEF_WRAP: TexWrap = "repeat"
 
 export type Outline = {
 	width: number,
@@ -348,7 +348,7 @@ export type NineSlice = {
 
 export type LoadSpriteSrc = string | ImageSource
 
-export type LoadSpriteOpt = {
+export type LoadSpriteOpt = TextureOpt & {
 	sliceX?: number,
 	sliceY?: number,
 	slice9?: NineSlice,
@@ -463,6 +463,17 @@ export default class TexPacker {
 export type DrawSpriteOpt = RenderProps & {
 	sprite: SpriteData,
 	frame?: number,
+	width?: number,
+	height?: number,
+	tiled?: boolean,
+	flipX?: boolean,
+	flipY?: boolean,
+	quad?: Quad,
+	anchor?: Anchor | Vec2,
+}
+
+export type DrawCanvasOpt = RenderProps & {
+	canvas: Canvas,
 	width?: number,
 	height?: number,
 	tiled?: boolean,
@@ -621,6 +632,17 @@ export class SpriteData {
 		this.width = width
 		this.height = height
 	}
+}
+
+export type Canvas = {
+	width: number,
+	height: number,
+	tex: Texture,
+	clear: () => void,
+	free: () => void,
+	toDataURL: () => string,
+	toImageData: () => ImageData,
+	draw: (action: () => void) => void,
 }
 
 export type LoadFontOpt = {
@@ -790,6 +812,7 @@ export class Texture {
 		const wrap = {
 			"repeat": gl.REPEAT,
 			"clampToEdge": gl.CLAMP_TO_EDGE,
+			"mirroredRepeat": gl.MIRRORED_REPEAT,
 		}[opt.wrap ?? DEF_WRAP]
 
 		this.bind()
@@ -1462,6 +1485,7 @@ export type CreateGameOpts = {
 	canvas?: HTMLCanvasElement,
 	width?: number,
 	height?: number,
+	scale?: number,
 	touchToMouse?: boolean,
 	maxFPS?: number,
 	crisp?: boolean,
@@ -1491,6 +1515,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 	const pd = gopt.pixelDensity ?? window.devicePixelRatio
 	const gw = (gopt.width || DEF_WIDTH)
 	const gh = (gopt.height || DEF_HEIGHT)
+	const gs = gopt.scale || 1
 	canvas.width = gw * pd
 	canvas.height = gh * pd
 	canvas.tabIndex = 0
@@ -1500,8 +1525,8 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		"cursor: default",
 	]
 
-	styles.push(`width: ${gw}px`)
-	styles.push(`height: ${gh}px`)
+	styles.push(`width: ${gw * gs}px`)
+	styles.push(`height: ${gh * gs}px`)
 
 	if (gopt.crisp) {
 		// chrome only supports pixelated and firefox only supports crisp-edges
@@ -1923,8 +1948,12 @@ export function createGame(gopt: CreateGameOpts = {}) {
 	const winEvents: EventList<WindowEventMap> = {}
 
 	canvasEvents.mousemove = (e) => {
-		const mousePos = new Vec2(e.offsetX, e.offsetY)
-		const mouseDeltaPos = new Vec2(e.movementX, e.movementY)
+		const x = e.offsetX / gs
+		const y = e.offsetY / gs
+		const dx = e.movementX / gs
+		const dy = e.movementY / gs
+		const mousePos = new Vec2(x, y)
+		const mouseDeltaPos = new Vec2(dx, dy)
 		if (isFullscreen()) {
 			const cw = app.canvas.width
 			const ch = app.canvas.height
@@ -1935,13 +1964,13 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			if (rw > rc) {
 				const ratio = wh / ch
 				const offset = (ww - (cw * ratio)) / 2
-				mousePos.x = map(e.offsetX - offset, 0, cw * ratio, 0, cw)
-				mousePos.y = map(e.offsetY, 0, ch * ratio, 0, ch)
+				mousePos.x = map(x - offset, 0, cw * ratio, 0, cw)
+				mousePos.y = map(y, 0, ch * ratio, 0, ch)
 			} else {
 				const ratio = ww / cw
 				const offset = (wh - (ch * ratio)) / 2
-				mousePos.x = map(e.offsetX , 0, cw * ratio, 0, cw)
-				mousePos.y = map(e.offsetY - offset, 0, ch * ratio, 0, ch)
+				mousePos.x = map(x , 0, cw * ratio, 0, cw)
+				mousePos.y = map(y - offset, 0, ch * ratio, 0, ch)
 			}
 		}
 		app.events.input.addOnce(() => {
@@ -2028,7 +2057,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		})
 	}
 
-	// TODO: handle all touches at once instead of sequentially
+
 	canvasEvents.touchstart = (e) => {
 		// disable long tap context menu
 		e.preventDefault()
@@ -2037,15 +2066,15 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			const box = app.canvas.getBoundingClientRect()
 			if (gopt.touchToMouse !== false) {
 				app.mousePos = new Vec2(
-					touches[0].clientX - box.x,
-					touches[0].clientY - box.y,
+					touches[0].clientX / gs - box.x,
+					touches[0].clientY / gs - box.y,
 				)
 				app.mouseState.press("left")
 				app.events.mousePress.trigger("left")
 			}
 			touches.forEach((t) => {
 				app.events.touchStart.trigger(
-					[new Vec2(t.clientX - box.x, t.clientY - box.y), t],
+					[new Vec2(t.clientX / gs - box.x, t.clientY / gs - box.y), t],
 				)
 			})
 		})
@@ -2060,58 +2089,48 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			if (gopt.touchToMouse !== false) {
 				const lastMousePos = app.mousePos
 				app.mousePos = new Vec2(
-					touches[0].clientX - box.x,
-					touches[0].clientY - box.y,
+					touches[0].clientX / gs - box.x,
+					touches[0].clientY / gs - box.y,
 				)
 				app.mouseDeltaPos = app.mousePos.sub(lastMousePos)
 				app.events.mouseMove.trigger()
 			}
 			touches.forEach((t) => {
 				app.events.touchMove.trigger(
-					[new Vec2(t.clientX - box.x, t.clientY - box.y), t],
+					[new Vec2(t.clientX / gs - box.x, t.clientY / gs - box.y), t],
 				)
 			})
+		})
+	}
+
+	function handleTouchEnd(e: TouchEvent) {
+		const touches = Array.from(e.changedTouches)
+		const box = app.canvas.getBoundingClientRect()
+		if (gopt.touchToMouse !== false) {
+			app.mousePos = new Vec2(
+				touches[0].clientX / gs - box.x,
+				touches[0].clientY / gs - box.y,
+			)
+			app.mouseDeltaPos = new Vec2(0,0)
+			app.mouseState.release("left")
+			app.events.mouseRelease.trigger("left")
+		}
+		touches.forEach((t) => {
+			app.events.touchEnd.trigger(
+				[new Vec2(t.clientX / gs - box.x, t.clientY / gs - box.y), t],
+			)
 		})
 	}
 
 	canvasEvents.touchend = (e) => {
 		app.events.input.addOnce(() => {
-			const touches = Array.from(e.changedTouches)
-			const box = app.canvas.getBoundingClientRect()
-			if (gopt.touchToMouse !== false) {
-				app.mousePos = new Vec2(
-					touches[0].clientX - box.x,
-					touches[0].clientY - box.y,
-				)
-				app.mouseDeltaPos = new Vec2(0,0)
-				app.mouseState.release("left")
-				app.events.mouseRelease.trigger("left")
-			}
-			touches.forEach((t) => {
-				app.events.touchEnd.trigger(
-					[new Vec2(t.clientX - box.x, t.clientY - box.y), t],
-				)
-			})
+			handleTouchEnd(e)
 		})
 	}
 
 	canvasEvents.touchcancel = (e) => {
 		app.events.input.addOnce(() => {
-			const touches = Array.from(e.changedTouches)
-			const box = app.canvas.getBoundingClientRect()
-			if (gopt.touchToMouse !== false) {
-				app.mousePos = new Vec2(
-					touches[0].clientX - box.x,
-					touches[0].clientY - box.y,
-				)
-				app.mouseState.release("left")
-				app.events.mouseRelease.trigger("left")
-			}
-			touches.forEach((t) => {
-				app.events.touchEnd.trigger(
-					[new Vec2(t.clientX - box.x, t.clientY - box.y), t],
-				)
-			})
+			handleTouchEnd(e)
 		})
 	}
 
@@ -2535,6 +2554,13 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			quad: frame.quad.scale(opt.quad ?? new Quad(0, 0, 1, 1)),
 		}))
 
+	}
+
+	function drawCanvas(opt: DrawCanvasOpt) {
+		drawTexture(Object.assign({}, opt, {
+			flipY: opt.flipY === true ? false : true,
+			tex: opt.canvas.tex,
+		}))
 	}
 
 	// generate vertices to form an arc
@@ -3331,6 +3357,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return frames
 	}
 
+	// TODO: how to support texture opt here?
 	async function loadSprite(src: string, opt: LoadSpriteOpt = {}): Promise<SpriteData> {
 		const img = await loadImg(src)
 		const [tex, quad] = packer.add(img)
@@ -3416,15 +3443,16 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		)
 	}
 
-	function createCanvas(w: number, h: number) {
-		const fb = new FrameBuffer(glCtx, w, h)
+	function createCanvas(w: number, h: number, opt: TextureOpt = {}): Canvas {
+		const fb = new FrameBuffer(glCtx, w, h, opt)
 		return {
+			width: fb.width,
+			height: fb.height,
+			tex: fb.tex,
 			clear: () => fb.clear(),
 			free: () => fb.free(),
 			toDataURL: () => fb.toDataURL(),
 			toImageData: () => fb.toImageData(),
-			width: fb.width,
-			height: fb.height,
 			draw: (action: () => void) => {
 				flush()
 				fb.bind()
@@ -3580,6 +3608,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		width,
 		height,
 		drawSprite,
+		drawCanvas,
 		drawRect,
 		drawCircle,
 		drawEllipse,

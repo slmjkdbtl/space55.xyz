@@ -156,6 +156,27 @@ export function mapValues<A, B>(obj: Record<string, A>, mapFn: (v: A) => B) {
 	}, {})
 }
 
+export type KV = Record<string, string | boolean | number>
+
+export function buildKV(props: KV) {
+	return Object.entries(props)
+		.filter(([k, v]) => v)
+		.map(([k, v]) => v === true ? k : `${k}=${v}`)
+		.join("; ")
+}
+
+export function parseKV(kv: string): KV {
+	const data: KV = {}
+	for (const c of kv.split(";")) {
+		const [k, v] = c.split("=").map((v) => v.trim())
+		data[k] = v ?? true
+		if (Number(v) + "" === v) {
+			data[k] = Number(v)
+		}
+	}
+	return data
+}
+
 const alphaNumChars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 export function randAlphaNum(len: number = 8) {
