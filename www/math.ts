@@ -90,6 +90,20 @@ export const rand = overload3(() => {
 	return a + Math.random() * (b - a)
 })
 
+export function choose<T>(list: T[]): T {
+	return list[Math.floor(Math.random() * list.length)]
+}
+
+export function randCell(start: Vec2, end: Vec2, cellSize: number): Vec2[] {
+	const list: Vec2[] = []
+	for (let x = start.x; x < end.x; x += cellSize) {
+		for (let y = start.y; y < end.y; y += cellSize) {
+			list.push(new Vec2(rand(x, x + cellSize), rand(y, y + cellSize)))
+		}
+	}
+	return list
+}
+
 // basic ANSI C LCG
 const A = 1103515245
 const C = 12345
@@ -653,6 +667,71 @@ export const rgb = overload3(() => {
 })
 
 export const hsl = (h: number, s: number, l: number) => Color.fromHSL(h, s, l)
+
+export type Trail = {
+	push: (pos: Vec2) => void,
+	pts: Vec2[],
+	spacing: number,
+	max: number,
+}
+
+export function createTrail(spacing: number, max: number) {
+
+	const pts: Vec2[] = []
+	let lastPos: Vec2 | null = null
+	let leftover = 0
+
+	function push(pos: Vec2) {
+
+		if (!lastPos) {
+			lastPos = pos.clone()
+			return
+		}
+
+		const dx = pos.x - lastPos.x
+		const dy = pos.y - lastPos.y
+		const dist = Math.hypot(dx, dy)
+		let totalDist = leftover + dist
+
+		if (totalDist >= spacing) {
+			const steps = Math.floor(totalDist / spacing)
+			for (let i = 1; i <= steps; i++) {
+				const t = (spacing * i - leftover) / dist
+				const x = lastPos.x + dx * t
+				const y = lastPos.y + dy * t
+				pts.push(vec2(x, y))
+			}
+			leftover = totalDist - steps * spacing
+		} else {
+			leftover += dist
+		}
+
+		lastPos = pos.clone()
+
+		if (pts.length > max) {
+			pts.splice(0, pts.length - max)
+		}
+
+	}
+
+	return {
+		pts,
+		push,
+		get max() {
+			return max
+		},
+		set max(m: number) {
+			max = m
+		},
+		get spacing() {
+			return spacing
+		},
+		set spacing(s: number) {
+			spacing = s
+		},
+	}
+
+}
 
 export class Line {
 	p1: Vec2
@@ -1415,7 +1494,6 @@ export function loop(t: number, action: () => void) {
 		action()
 		curTimer = wait(t, newAction)
 	}
-	action()
 	let curTimer = wait(t, newAction)
 	function cancel() {
 		curTimer.cancel()

@@ -6,6 +6,7 @@ import {
 import {
 	Vec2,
 	Color,
+	Line,
 	vec2,
 	rgb,
 	hsl,
@@ -16,7 +17,20 @@ import {
 	deg2rad,
 	rand,
 	easings,
+	loop,
+	choose,
+	Trail,
+	createTrail,
 } from "www/math"
+
+// function dottedLine(pts: Vec2[], len: number): Line[] {
+	// const lines: Line[] = []
+	// for (let i = 0; i < pts.length - 1; i++) {
+		// const p1 = pts[i]
+		// const p2 = pts[i + 1]
+	// }
+	// return lines
+// }
 
 const WIDTH = 200
 const HEIGHT = 200
@@ -69,6 +83,8 @@ const assets = loadAssets({
 		moon: g.loadSpritesAnim(seq(`${a}/moon-?.png`, 3)),
 		btfly: g.loadSpritesAnim(seq(`${a}/btfly-?.png`, 2)),
 		bg: g.loadSpritesAnim(seq(`${a}/bg-?.jpg`, 8)),
+		flower: g.loadSprite(`${a}/flower.png`),
+		bear: g.loadSprite(`${a}/bear.png`),
 	},
 	audio: {
 		song: g.loadAudio(`${a}/song.mp3`),
@@ -97,23 +113,6 @@ vec4 frag(vec2 pos, vec2 uv, vec4 color, sampler2D tex) {
 }
 `)
 
-const transitionShader = g.createShader(null, `
-uniform float u_time;
-
-vec4 frag(vec2 pos, vec2 uv, vec4 color, sampler2D tex) {
-	vec4 c = def_frag();
-	if (u_time == 1.0) {
-		return c;
-	}
-	float x = pos.x / 2.0 + 0.5;
-	if (x > u_time) {
-		return vec4(0, 0, 0, 0);
-	}
-	float a = smoothstep(u_time, u_time - 0.05, x);
-	return vec4(c.rgb, a);
-}
-`)
-
 function shake(p: Vec2, s: number = 2) {
 	return p.add(vec2(rand(-s, s), rand(-s, s)))
 }
@@ -133,9 +132,9 @@ function drawLilFang(opt: {
 	const d1 = opt.lookat.sub(opt.pos.add(leftEyeCenter)).unit().scale(eyeDist)
 	const d2 = opt.lookat.sub(opt.pos.add(rightEyeCenter)).unit().scale(eyeDist)
 
-	for (let i = 0; i < lilFangPosHist.length - 1; i++) {
+	for (let i = 0; i < lilfang.posHist.length - 1; i++) {
 		g.drawSprite({
-			pos: lilFangPosHist[i],
+			pos: lilfang.posHist[i],
 			sprite: assets.sprites["face"],
 			opacity: map(i, 0, MAX_LILFANG_POS_HIST, 0.2, 0.7),
 			anchor: "center",
@@ -186,22 +185,49 @@ function drawLilFang(opt: {
 
 }
 
-let pos = vec2(g.width() / 2, g.height() / 2)
 let crazy = false
 let crazyIntensity = 0
-let angle = 0
 let talking = 0
 
-let btflyPos = vec2(0)
-let btflyAngle = 0
-const MAX_BTFLY_POS_HIST = 32
+type Btfly = {
+	pos: Vec2,
+	angle: number,
+	lastPos: Vec2,
+	trail: Trail,
+}
+
+const btfly: Btfly = {
+	pos: vec2(0),
+	angle: 0,
+	lastPos: vec2(0),
+	trail: createTrail(12, 20),
+}
+
 const MAX_LILFANG_POS_HIST = 48
-const btflyPosHist: Vec2[] = []
-let lastBtflyPos = vec2(0)
-const lilFangPosHist: Vec2[] = []
+
+type LilFang = {
+	pos: Vec2,
+	angle: number,
+	posHist: Vec2[],
+}
+
+const lilfang: LilFang = {
+	pos: vec2(g.width() / 2, g.height() / 2),
+	angle: 0,
+	posHist: [],
+}
+
+type Flower = {
+	pos: Vec2,
+	sprite: string,
+	angle: number,
+	time: number,
+}
+
+const flowers: Flower[] = []
 
 g.onKeyPress("space", () => {
-	g.tween(0, 360, 0.4, (v) => angle = v, easings.easeOutCubic)
+	g.tween(0, 360, 0.4, (v) => lilfang.angle = v, easings.easeOutCubic)
 })
 
 g.onKeyPress("c", () => {
@@ -254,6 +280,16 @@ assets.onReady(() => {
 
 const bgCanvas = g.createCanvas(g.width(), g.height(), { wrap: "mirroredRepeat" })
 
+const flowerTimer = loop(0.3, () => {
+	const f: Flower = {
+		sprite: choose(["flower"]),
+		pos: vec2(rand(0, g.width()), rand(0, g.height())),
+		angle: rand(0, 360),
+		time: 0,
+	}
+	flowers.push(f)
+})
+
 g.run(() => {
 
 	if (!assets.ready) {
@@ -303,21 +339,32 @@ g.run(() => {
 			width: g.width(),
 			height: g.height(),
 			opacity: bgTimer >= BG_TIME - BG_TRANSITION ? mapc(bgTimer, BG_TIME - BG_TRANSITION, BG_TIME, 1, 0) : 1,
-			// shader: transitionShader,
-			// uniform: {
-				// "u_time": bgTimer >= BG_TIME - BG_TRANSITION ? mapc(bgTimer, BG_TIME - BG_TRANSITION, BG_TIME, 1, 0) : 1,
-				// "u_time": mpos.x / g.width(),
-			// },
 		})
 
-		// if (crazy) {
-			// g.drawRect({
-				// width: g.width(),
-				// height: g.height(),
-				// color: hsl(wave(0, 1, g.time() * 2), 0.5, 0.5),
-				// opacity: 0.3,
-			// })
-		// }
+		if (crazy) {
+			g.drawRect({
+				width: g.width(),
+				height: g.height(),
+				color: hsl(wave(0, 1, g.time() * 2), 0.5, 0.5),
+				opacity: crazyIntensity * 0.1,
+			})
+		}
+
+		for (let i = flowers.length - 1; i >= 0; i--) {
+			const f = flowers[i]
+			f.time += g.dt()
+			if (f.time >= 1.5) {
+				flowers.splice(i, 1)
+				continue
+			}
+			g.drawSprite({
+				sprite: assets.sprites[f.sprite],
+				pos: f.pos,
+				angle: f.angle + g.time() * 60,
+				scale: Math.sin(f.time * 2) * 1.5,
+				anchor: "center",
+			})
+		}
 
 	})
 
@@ -331,44 +378,49 @@ g.run(() => {
 	})
 
 	if (crazy) {
-		lilFangPosHist.push(shake(pos, 16))
-		if (lilFangPosHist.length > MAX_LILFANG_POS_HIST) {
-			lilFangPosHist.shift()
+		lilfang.posHist.push(shake(lilfang.pos, 16))
+		if (lilfang.posHist.length > MAX_LILFANG_POS_HIST) {
+			lilfang.posHist.shift()
 		}
 	} else {
-		lilFangPosHist.shift()
+		lilfang.posHist.shift()
+	}
+
+	if (crazy) {
+		flowerTimer.update(g.dt())
 	}
 
 	const d = 2
 
 	drawLilFang({
 		crazy: crazy,
-		lookat: btflyPos,
-		pos: crazy ? pos.add(vec2(rand(-d, d), rand(-d, d))) : pos,
-		angle: angle,
+		lookat: btfly.pos,
+		pos: crazy ? lilfang.pos.add(vec2(rand(-d, d), rand(-d, d))) : lilfang.pos,
+		angle: lilfang.angle,
 		talking: talking > 0,
 	})
 
-	for (let i = 0; i < btflyPosHist.length - 2; i++) {
+	for (let i = 0; i < btfly.trail.pts.length - 1; i++) {
+		const p1 = btfly.trail.pts[i]
+		const p2 = btfly.trail.pts[i + 1]
+		const d = p2.sub(p1).unit()
 		g.drawLine({
-			p1: btflyPosHist[i],
-			p2: btflyPosHist[i + 1],
+			p1: p1,
+			p2: p1.add(d.scale(6)),
 			width: 2,
-			opacity: map(i, 0, MAX_BTFLY_POS_HIST, 0, 0.5),
+			opacity: map(i, 0, btfly.trail.max, 0, 0.5),
 			color: rgb(255, 255, 255),
 		})
 	}
 
-	lastBtflyPos = btflyPos.clone()
-	btflyPos = btflyPos.lerp(mpos, dt * 4)
-	btflyPosHist.push(btflyPos)
-	btflyPosHist.splice(0, btflyPosHist.length - MAX_BTFLY_POS_HIST)
-
-	btflyAngle = btflyPos.angle(lastBtflyPos)
+	btfly.lastPos = btfly.pos.clone()
+	btfly.pos = btfly.pos.lerp(mpos, dt * 4)
+	btfly.trail.push(btfly.pos)
+	btfly.angle = btfly.pos.angle(btfly.lastPos)
 
 	g.drawSprite({
-		pos: crazy ? shake(btflyPos) : btflyPos,
-		angle: btflyAngle + 90,
+		pos: crazy ? shake(btfly.pos) : btfly.pos,
+		angle: btfly.angle + 90,
 		sprite: assets.sprites["btfly"], frame: anim("btfly"),
 		anchor: "center",
 	})
