@@ -23,15 +23,6 @@ import {
 	createTrail,
 } from "www/math"
 
-// function dottedLine(pts: Vec2[], len: number): Line[] {
-	// const lines: Line[] = []
-	// for (let i = 0; i < pts.length - 1; i++) {
-		// const p1 = pts[i]
-		// const p2 = pts[i + 1]
-	// }
-	// return lines
-// }
-
 const WIDTH = 200
 const HEIGHT = 200
 const SCALE = 2
@@ -67,33 +58,33 @@ function anim(name: string, animName?: string) {
 	}
 }
 
-const a = "/static/lilfang"
+const root = "/static/lilfang"
 
 const assets = loadAssets({
 	sprites: {
-		lilfang: g.loadSpritesAnim(seq(`${a}/lilfang_head-?.png`, 3)),
-		face: g.loadSpritesAnim(seq(`${a}/lilfang_face-?.png`, 1)),
-		eye: g.loadSpritesAnim(seq(`${a}/lilfang_eye-?.png`, 3)),
-		mouth: g.loadSpritesAnim(seq(`${a}/lilfang_mouth-?.png`, 6), {
+		lilfang: g.loadSpritesAnim(seq(`${root}/lilfang_head-?.png`, 3)),
+		face: g.loadSpritesAnim(seq(`${root}/lilfang_face-?.png`, 1)),
+		eye: g.loadSpritesAnim(seq(`${root}/lilfang_eye-?.png`, 3)),
+		mouth: g.loadSpritesAnim(seq(`${root}/lilfang_mouth-?.png`, 6), {
 			anims: {
 				idle: { from: 0, to: 2, loop: true, },
 				talk: { from: 3, to: 5, loop: true, },
 			},
 		}),
-		moon: g.loadSpritesAnim(seq(`${a}/moon-?.png`, 3)),
-		btfly: g.loadSpritesAnim(seq(`${a}/btfly-?.png`, 2)),
-		bg: g.loadSpritesAnim(seq(`${a}/bg-?.jpg`, 8)),
-		flower: g.loadSprite(`${a}/flower.png`),
-		bear: g.loadSprite(`${a}/bear.png`),
+		moon: g.loadSpritesAnim(seq(`${root}/moon-?.png`, 3)),
+		btfly: g.loadSpritesAnim(seq(`${root}/btfly-?.png`, 2)),
+		bg: g.loadSpritesAnim(seq(`${root}/bg-?.jpg`, 8)),
+		flower: g.loadSprite(`${root}/flower.png`),
+		bear: g.loadSprite(`${root}/bear.png`),
 	},
 	audio: {
-		song: g.loadAudio(`${a}/song.mp3`),
+		song: g.loadAudio(`${root}/song.mp3`),
 	},
 	sounds: {
-		horn: g.loadSound(`${a}/horn.mp3`),
+		horn: g.loadSound(`${root}/horn.mp3`),
 	},
 	fonts: {
-		["04b03"]: g.loadBitmapFont(`${a}/04b03_6x8.png`, 6, 8),
+		["04b03"]: g.loadBitmapFont(`${root}/04b03_6x8.png`, 6, 8),
 	},
 })
 
@@ -185,6 +176,7 @@ function drawLilFang(opt: {
 
 }
 
+let debug = false
 let crazy = false
 let crazyIntensity = 0
 let talking = 0
@@ -200,7 +192,7 @@ const btfly: Btfly = {
 	pos: vec2(0),
 	angle: 0,
 	lastPos: vec2(0),
-	trail: createTrail(12, 20),
+	trail: createTrail(12, 8),
 }
 
 const MAX_LILFANG_POS_HIST = 48
@@ -225,18 +217,6 @@ type Flower = {
 }
 
 const flowers: Flower[] = []
-
-g.onKeyPress("space", () => {
-	g.tween(0, 360, 0.4, (v) => lilfang.angle = v, easings.easeOutCubic)
-})
-
-g.onKeyPress("c", () => {
-	crazy = !crazy
-})
-
-g.onKeyPress("h", () => {
-	g.playSound(assets.sounds["horn"])
-})
 
 let popCursor = 0
 
@@ -266,6 +246,17 @@ let curBg = 0
 let bgTimer = 0
 const BG_TIME = 7
 const BG_TRANSITION = 1
+const trail: Poop[] = []
+const bgCanvas = g.createCanvas(g.width(), g.height(), { wrap: "mirroredRepeat" })
+
+const flowerTimer = loop(0.3, () => {
+	flowers.push({
+		sprite: choose(["flower"]),
+		pos: vec2(rand(0, g.width()), rand(0, g.height())),
+		angle: rand(0, 360),
+		time: 0,
+	})
+})
 
 assets.onReady(() => {
 	g.onKeyPress("p", () => {
@@ -278,16 +269,26 @@ assets.onReady(() => {
 	})
 })
 
-const bgCanvas = g.createCanvas(g.width(), g.height(), { wrap: "mirroredRepeat" })
+type Poop = {
+	p1: Vec2,
+	p2: Vec2,
+	time: number,
+}
 
-const flowerTimer = loop(0.3, () => {
-	const f: Flower = {
-		sprite: choose(["flower"]),
-		pos: vec2(rand(0, g.width()), rand(0, g.height())),
-		angle: rand(0, 360),
-		time: 0,
-	}
-	flowers.push(f)
+g.onKeyPress("space", () => {
+	g.tween(0, 360, 0.4, (v) => lilfang.angle = v, easings.easeOutCubic)
+})
+
+g.onKeyPress("c", () => {
+	crazy = !crazy
+})
+
+g.onKeyPress("h", () => {
+	g.playSound(assets.sounds["horn"])
+})
+
+g.onKeyPress("f1", () => {
+	debug = !debug
 })
 
 g.run(() => {
@@ -325,7 +326,6 @@ g.run(() => {
 
 	bgCanvas.draw(() => {
 
-		// TODO: ppt transition effects
 		g.drawSprite({
 			sprite: bgSprite,
 			frame: (curBg + 1) % bgSprite.frames.length,
@@ -400,23 +400,43 @@ g.run(() => {
 		talking: talking > 0,
 	})
 
+	btfly.lastPos = btfly.pos.clone()
+	btfly.pos = btfly.pos.lerp(mpos, dt * 4)
+	btfly.angle = btfly.pos.angle(btfly.lastPos)
+	btfly.trail.push(btfly.pos)
+
 	for (let i = 0; i < btfly.trail.pts.length - 1; i++) {
 		const p1 = btfly.trail.pts[i]
 		const p2 = btfly.trail.pts[i + 1]
 		const d = p2.sub(p1).unit()
-		g.drawLine({
-			p1: p1,
-			p2: p1.add(d.scale(6)),
-			width: 2,
-			opacity: map(i, 0, btfly.trail.max, 0, 0.5),
-			color: rgb(255, 255, 255),
+		trail.push({
+			p1: p1.clone(),
+			p2: p1.add(d.scale(2)),
+			time: 0,
 		})
 	}
 
-	btfly.lastPos = btfly.pos.clone()
-	btfly.pos = btfly.pos.lerp(mpos, dt * 4)
-	btfly.trail.push(btfly.pos)
-	btfly.angle = btfly.pos.angle(btfly.lastPos)
+	btfly.trail.pts.splice(0, btfly.trail.pts.length - 1)
+
+	for (let i = trail.length - 1; i >= 0; i--) {
+		const t = trail[i]
+		t.time += g.dt()
+		if (t.time >= 0.5) {
+			trail.splice(i, 1)
+			continue
+		}
+		const center = t.p1.add(t.p2).scale(0.5)
+		g.pushTransform()
+		g.pushTranslate(center)
+		g.pushScale(Math.sin(t.time * 6) * 1.5)
+		g.drawLine({
+			p1: t.p1.sub(center),
+			p2: t.p2.sub(center),
+			width: 1,
+			cap: "round",
+		})
+		g.popTransform()
+	}
 
 	g.drawSprite({
 		pos: crazy ? shake(btfly.pos) : btfly.pos,
@@ -425,11 +445,13 @@ g.run(() => {
 		anchor: "center",
 	})
 
-	// g.drawText({
-		// text: `${song.currentTime}`,
-		// font: assets.fonts["04b03"],
-		// size: 16,
-		// pos: vec2(16),
-	// })
+	if (debug) {
+		g.drawText({
+			text: `${song.currentTime}`,
+			font: assets.fonts["04b03"],
+			size: 16,
+			pos: vec2(8),
+		})
+	}
 
 })

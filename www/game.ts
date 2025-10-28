@@ -497,7 +497,12 @@ export type DrawLineOpt = Omit<RenderProps, "angle" | "scale"> & {
 	p1: Vec2,
 	p2: Vec2,
 	width?: number,
+	cap?: LineCap,
 }
+
+export type LineCap =
+	| "none"
+	| "round"
 
 export type LineJoin =
 	| "none"
@@ -2686,6 +2691,20 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		}))
 
 		drawRaw(verts, [0, 1, 3, 1, 2, 3], gfx.defTex, opt.shader, opt.uniform)
+
+		// TODO: generate arc points instead of drawCircle
+		if (opt.cap === "round") {
+			drawCircle({
+				pos: p1,
+				radius: w / 2,
+				...opt,
+			})
+			drawCircle({
+				pos: p2,
+				radius: w / 2,
+				...opt,
+			})
+		}
 
 	}
 
