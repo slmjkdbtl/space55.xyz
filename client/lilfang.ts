@@ -26,7 +26,16 @@ import {
 const WIDTH = 200
 const HEIGHT = 200
 const SCALE = 2
+const G = 300
 const ANIM_FPS = 8
+const MAX_LILFANG_POS_HIST = 48
+const BG_TIME = 7
+const BG_TRANSITION = 1
+const R = "/static/lilfang"
+const TRAIL_SPACE = 12
+const TRAIL_LEN = 3
+const TRAIL_TIME = 0.5
+const FLOWER_TIME = 1.5
 
 const g = createGame({
 	width: WIDTH,
@@ -34,7 +43,8 @@ const g = createGame({
 	scale: SCALE,
 	crisp: true,
 	// pixelDensity: 1,
-	background: [255, 255, 255],
+	// background: [255, 255, 255],
+	background: [0, 0, 0],
 })
 
 g.setCursor("none")
@@ -58,33 +68,32 @@ function anim(name: string, animName?: string) {
 	}
 }
 
-const root = "/static/lilfang"
-
 const assets = loadAssets({
 	sprites: {
-		lilfang: g.loadSpritesAnim(seq(`${root}/lilfang_head-?.png`, 3)),
-		face: g.loadSpritesAnim(seq(`${root}/lilfang_face-?.png`, 1)),
-		eye: g.loadSpritesAnim(seq(`${root}/lilfang_eye-?.png`, 3)),
-		mouth: g.loadSpritesAnim(seq(`${root}/lilfang_mouth-?.png`, 6), {
+		lilfang: g.loadSpritesAnim(seq(`${R}/lilfang_head-?.png`, 3)),
+		face: g.loadSpritesAnim(seq(`${R}/lilfang_face-?.png`, 1)),
+		eye: g.loadSpritesAnim(seq(`${R}/lilfang_eye-?.png`, 3)),
+		mouth: g.loadSpritesAnim(seq(`${R}/lilfang_mouth-?.png`, 6), {
 			anims: {
 				idle: { from: 0, to: 2, loop: true, },
 				talk: { from: 3, to: 5, loop: true, },
 			},
 		}),
-		moon: g.loadSpritesAnim(seq(`${root}/moon-?.png`, 3)),
-		btfly: g.loadSpritesAnim(seq(`${root}/btfly-?.png`, 2)),
-		bg: g.loadSpritesAnim(seq(`${root}/bg-?.jpg`, 8)),
-		flower: g.loadSprite(`${root}/flower.png`),
-		bear: g.loadSprite(`${root}/bear.png`),
+		moon: g.loadSpritesAnim(seq(`${R}/moon-?.png`, 3)),
+		btfly: g.loadSpritesAnim(seq(`${R}/btfly-?.png`, 2)),
+		bg: g.loadSpritesAnim(seq(`${R}/bg-?.jpg`, 8)),
+		flower: g.loadSprite(`${R}/flower.png`),
+		bear: g.loadSprite(`${R}/bear.png`),
+		hairband: g.loadSprite(`${R}/hairband.png`),
 	},
 	audio: {
-		song: g.loadAudio(`${root}/song.mp3`),
+		song: g.loadAudio(`${R}/song.mp3`),
 	},
 	sounds: {
-		horn: g.loadSound(`${root}/horn.mp3`),
+		horn: g.loadSound(`${R}/horn.mp3`),
 	},
 	fonts: {
-		["04b03"]: g.loadBitmapFont(`${root}/04b03_6x8.png`, 6, 8),
+		["04b03"]: g.loadBitmapFont(`${R}/04b03_6x8.png`, 6, 8),
 	},
 })
 
@@ -192,10 +201,8 @@ const btfly: Btfly = {
 	pos: vec2(0),
 	angle: 0,
 	lastPos: vec2(0),
-	trail: createTrail(12, 8),
+	trail: createTrail(TRAIL_SPACE),
 }
-
-const MAX_LILFANG_POS_HIST = 48
 
 type LilFang = {
 	pos: Vec2,
@@ -211,12 +218,18 @@ const lilfang: LilFang = {
 
 type Flower = {
 	pos: Vec2,
-	sprite: string,
 	angle: number,
 	time: number,
 }
 
+type Hairband = {
+	pos: Vec2,
+	angle: number,
+	vel: Vec2,
+}
+
 const flowers: Flower[] = []
+const hairbands: Hairband[] = []
 
 let popCursor = 0
 
@@ -244,17 +257,26 @@ const popSoundsTime = [
 
 let curBg = 0
 let bgTimer = 0
-const BG_TIME = 7
-const BG_TRANSITION = 1
 const trail: Poop[] = []
 const bgCanvas = g.createCanvas(g.width(), g.height(), { wrap: "mirroredRepeat" })
 
 const flowerTimer = loop(0.3, () => {
+	const padX = 0
+	const padY = 0
 	flowers.push({
-		sprite: choose(["flower"]),
-		pos: vec2(rand(0, g.width()), rand(0, g.height())),
+		pos: vec2(rand(padX, g.width() - padX), rand(padY, g.height() - padY)),
 		angle: rand(0, 360),
 		time: 0,
+	})
+})
+
+const hairbandTimer = loop(0.8, () => {
+	const padX = 0
+	const pos = vec2(rand(padX, g.width() - padX), g.height())
+	hairbands.push({
+		pos: pos,
+		angle: rand(0, 360),
+		vel: vec2(rand(20, 100) * (pos.x < g.width() / 2 ? 1 : -1), rand(-300, -200)),
 	})
 })
 
@@ -291,10 +313,41 @@ g.onKeyPress("f1", () => {
 	debug = !debug
 })
 
+g.onKeyPress("right", () => {
+	const song = assets.audio["song"]
+	song.currentTime += 1.0
+})
+
+g.onKeyPress("left", () => {
+	const song = assets.audio["song"]
+	song.currentTime -= 1.0
+})
+
+function drawProgress(p: number) {
+	const w = 100
+	const h = 12
+	const pos = vec2((g.width() - w) / 2, (g.height() - h) / 2)
+	g.drawRect({
+		pos: pos,
+		width: w,
+		height: h,
+		outline: {
+			width: 2,
+			join: "round",
+		},
+		fill: false,
+	})
+	g.drawRect({
+		pos: pos,
+		width: w * assets.progress,
+		height: h,
+	})
+}
+
 g.run(() => {
 
 	if (!assets.ready) {
-		// TODO
+		drawProgress(assets.progress)
 		return
 	}
 
@@ -322,7 +375,7 @@ g.run(() => {
 		bgTimer = 0
 	}
 
-	crazyIntensity = lerp(crazyIntensity, crazy ? 1 : 0, g.dt() * 1.0)
+	crazyIntensity = lerp(crazyIntensity, crazy ? 1 : 0, dt * 1.0)
 
 	bgCanvas.draw(() => {
 
@@ -352,16 +405,16 @@ g.run(() => {
 
 		for (let i = flowers.length - 1; i >= 0; i--) {
 			const f = flowers[i]
-			f.time += g.dt()
-			if (f.time >= 1.5) {
+			f.time += dt
+			if (f.time >= FLOWER_TIME) {
 				flowers.splice(i, 1)
 				continue
 			}
 			g.drawSprite({
-				sprite: assets.sprites[f.sprite],
+				sprite: assets.sprites["flower"],
 				pos: f.pos,
 				angle: f.angle + g.time() * 60,
-				scale: Math.sin(f.time * 2) * 1.5,
+				scale: Math.sin(f.time * Math.PI / FLOWER_TIME) * 1.5,
 				anchor: "center",
 			})
 		}
@@ -378,7 +431,7 @@ g.run(() => {
 	})
 
 	if (crazy) {
-		lilfang.posHist.push(shake(lilfang.pos, 16))
+		lilfang.posHist.push(shake(lilfang.pos, 20))
 		if (lilfang.posHist.length > MAX_LILFANG_POS_HIST) {
 			lilfang.posHist.shift()
 		}
@@ -387,7 +440,8 @@ g.run(() => {
 	}
 
 	if (crazy) {
-		flowerTimer.update(g.dt())
+		flowerTimer.update(dt)
+		hairbandTimer.update(dt)
 	}
 
 	const d = 2
@@ -411,7 +465,7 @@ g.run(() => {
 		const d = p2.sub(p1).unit()
 		trail.push({
 			p1: p1.clone(),
-			p2: p1.add(d.scale(2)),
+			p2: p1.add(d.scale(TRAIL_LEN)),
 			time: 0,
 		})
 	}
@@ -420,19 +474,19 @@ g.run(() => {
 
 	for (let i = trail.length - 1; i >= 0; i--) {
 		const t = trail[i]
-		t.time += g.dt()
-		if (t.time >= 0.5) {
+		t.time += dt
+		if (t.time >= TRAIL_TIME) {
 			trail.splice(i, 1)
 			continue
 		}
 		const center = t.p1.add(t.p2).scale(0.5)
 		g.pushTransform()
 		g.pushTranslate(center)
-		g.pushScale(Math.sin(t.time * 6) * 1.5)
+		g.pushScale(Math.sin(t.time * Math.PI / TRAIL_TIME))
 		g.drawLine({
 			p1: t.p1.sub(center),
 			p2: t.p2.sub(center),
-			width: 1,
+			width: 1.5,
 			cap: "round",
 		})
 		g.popTransform()
@@ -444,6 +498,20 @@ g.run(() => {
 		sprite: assets.sprites["btfly"], frame: anim("btfly"),
 		anchor: "center",
 	})
+
+	for (let i = hairbands.length - 1; i >= 0; i--) {
+		const h = hairbands[i]
+		const t = g.time() + h.angle
+		h.vel.y += G * dt
+		h.pos = h.pos.add(h.vel.scale(dt))
+		g.drawSprite({
+			sprite: assets.sprites["hairband"],
+			pos: h.pos,
+			angle: h.angle + g.time() * 60 * (h.vel.x < 0 ? -1 : 1),
+			scale: vec2(wave(0.8, 1.2, t * 8), wave(0.8, 1.2, t * 8 + Math.PI)),
+			anchor: "center",
+		})
+	}
 
 	if (debug) {
 		g.drawText({

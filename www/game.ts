@@ -325,7 +325,7 @@ export type RenderProps = {
 	opacity?: number,
 	uniform?: Uniform,
 	shader?: Shader,
-	outline?: Outline,
+	outline?: Partial<Outline>,
 }
 
 type DrawTextureOpt = RenderProps & {
@@ -493,7 +493,7 @@ export type DrawRectOpt = RenderProps & {
 	anchor?: Anchor | Vec2,
 }
 
-export type DrawLineOpt = Omit<RenderProps, "angle" | "scale"> & {
+export type DrawLineOpt = Omit<RenderProps, "pos" | "angle" | "scale"> & {
 	p1: Vec2,
 	p2: Vec2,
 	width?: number,
@@ -507,8 +507,8 @@ export type LineCap =
 export type LineJoin =
 	| "none"
 	| "round"
-	| "bevel"
-	| "miter"
+	// | "bevel"
+	// | "miter"
 
 export type DrawLinesOpt = Omit<RenderProps, "angle" | "scale"> & {
 	pts: Vec2[],
@@ -1373,17 +1373,6 @@ function alignPt(align: TextAlign): number {
 	}
 }
 
-export async function loadMap<T>(entries: Record<string, Promise<T>>): Promise<Record<string, T>> {
-	return await Promise.all(Object.entries(entries).map(([k, v]) => v.then(val => [k, val] as const)))
-		.then((d) => {
-			const bucket: Record<string, T> = {}
-			for (const [name, data] of d) {
-				bucket[name] = data
-			}
-			return bucket
-		})
-}
-
 export type AssetsEntries = {
 	sprites?: Record<string, Promise<SpriteData>>,
 	audio?: Record<string, Promise<AudioData>>,
@@ -1394,6 +1383,9 @@ export type AssetsEntries = {
 
 export type Assets = {
 	ready: boolean,
+	numLoaded: number,
+	num: number,
+	progress: number,
 	sprites: Record<string, SpriteData>,
 	audio: Record<string, AudioData>,
 	sounds: Record<string, SoundData>,
@@ -1403,77 +1395,70 @@ export type Assets = {
 	then: (action: () => void) => void,
 }
 
-// TODO: progress
-// TODO: kinda ugly
 export function loadAssets(entries: AssetsEntries): Assets {
 
+	let num = 0
+	let numLoaded = 0
 	const onReadyEvent = new Event()
-	let spritesLoaded = false
-	let audioLoaded = false
-	let soundsLoaded = false
-	let fontsLoaded = false
-	let textLoaded = false
 	let sprites: Record<string, SpriteData> = {}
 	let audio: Record<string, AudioData> = {}
 	let sounds: Record<string, SoundData> = {}
 	let fonts: Record<string, BitmapFontData> = {}
 	let text: Record<string, string> = {}
 
-	function isReady() {
-		return spritesLoaded
-			&& audioLoaded
-			&& soundsLoaded
-			&& fontsLoaded
-			&& textLoaded
+	async function loadMap<T>(map: Record<string, Promise<T>>): Promise<Record<string, T>> {
+		const entries = Object.entries(map)
+		const bucket: Record<string, T> = {}
+		num += entries.length
+		await Promise.all(
+			entries.map(([name, loader]) => {
+				return loader.then((data) => {
+					numLoaded += 1
+					bucket[name] = data
+				})
+			})
+		)
+		return bucket
 	}
 
 	function onReady(action: () => void) {
 		onReadyEvent.add(action)
 	}
 
-	loadMap<SpriteData>(entries.sprites ?? {}).then((s) => {
-		spritesLoaded = true
-		Object.assign(sprites, s)
-		if (isReady()) {
-			onReadyEvent.trigger()
-		}
-	})
+	const tasks = [
+		loadMap<SpriteData>(entries.sprites ?? {}).then((s) => {
+			Object.assign(sprites, s)
+		}),
+		loadMap<AudioData>(entries.audio ?? {}).then((s) => {
+			Object.assign(audio, s)
+		}),
+		loadMap<SoundData>(entries.sounds ?? {}).then((s) => {
+			Object.assign(sounds, s)
+		}),
+		loadMap<BitmapFontData>(entries.fonts ?? {}).then((s) => {
+			Object.assign(fonts, s)
+		}),
+		loadMap<string>(entries.text ?? {}).then((s) => {
+			Object.assign(text, s)
+		}),
+	]
 
-	loadMap<AudioData>(entries.audio ?? {}).then((s) => {
-		audioLoaded = true
-		Object.assign(audio, s)
-		if (isReady()) {
-			onReadyEvent.trigger()
-		}
-	})
-
-	loadMap<SoundData>(entries.sounds ?? {}).then((s) => {
-		soundsLoaded = true
-		Object.assign(sounds, s)
-		if (isReady()) {
-			onReadyEvent.trigger()
-		}
-	})
-
-	loadMap<BitmapFontData>(entries.fonts ?? {}).then((s) => {
-		fontsLoaded = true
-		Object.assign(fonts, s)
-		if (isReady()) {
-			onReadyEvent.trigger()
-		}
-	})
-
-	loadMap<string>(entries.text ?? {}).then((s) => {
-		textLoaded = true
-		Object.assign(text, s)
-		if (isReady()) {
-			onReadyEvent.trigger()
-		}
+	Promise.all(tasks).then(() => {
+		onReadyEvent.trigger()
 	})
 
 	return {
+		get num() {
+			return num
+		},
+		get numLoaded() {
+			return numLoaded
+		},
+		get progress() {
+			return numLoaded / num
+		},
 		get ready() {
-			return isReady()
+			return numLoaded >= num
 		},
 		sprites: sprites,
 		audio: audio,
@@ -2505,7 +2490,8 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			// TODO: rotation
 			for (let i = 0; i < repX; i++) {
 				for (let j = 0; j < repY; j++) {
-					drawUVQuad(Object.assign({}, opt, {
+					drawUVQuad({
+						...opt,
 						pos: (opt.pos || new Vec2(0)).add(new Vec2(w * i, h * j)).sub(offset),
 						scale: scale.scale(opt.scale || new Vec2(1)),
 						tex: opt.tex,
@@ -2513,7 +2499,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 						width: w,
 						height: h,
 						anchor: "topleft",
-					}))
+					})
 				}
 			}
 		} else {
@@ -2530,13 +2516,14 @@ export function createGame(gopt: CreateGameOpts = {}) {
 				scale.x = scale.y
 			}
 
-			drawUVQuad(Object.assign({}, opt, {
+			drawUVQuad({
+				...opt,
 				scale: scale.scale(opt.scale || new Vec2(1)),
 				tex: opt.tex,
 				quad: q,
 				width: w,
 				height: h,
-			}))
+			})
 
 		}
 
@@ -2554,28 +2541,30 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			throw new Error(`frame not found: ${opt.frame ?? 0}`)
 		}
 
-		drawTexture(Object.assign({}, opt, {
+		drawTexture({
+			...opt,
 			tex: frame.tex,
 			quad: frame.quad.scale(opt.quad ?? new Quad(0, 0, 1, 1)),
-		}))
+		})
 
 	}
 
 	function drawCanvas(opt: DrawCanvasOpt) {
-		drawTexture(Object.assign({}, opt, {
+		drawTexture({
+			...opt,
 			flipY: opt.flipY === true ? false : true,
 			tex: opt.canvas.tex,
-		}))
+		})
 	}
 
 	// generate vertices to form an arc
-	function getArcPts(
+	function genArcPts(
 		pos: Vec2,
 		radiusX: number,
 		radiusY: number,
 		start: number,
 		end: number,
-		res: number = 1,
+		res: number = 8,
 	): Vec2[] {
 
 		// normalize and turn start and end angles to radians
@@ -2584,7 +2573,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		if (end <= start) end += Math.PI * 2
 
 		const pts = []
-		const nverts = Math.ceil((end - start) / deg2rad(8) * res)
+		const nverts = Math.ceil((end - start) / deg2rad(res))
 		const step = (end - start) / nverts
 
 		// calculate vertices
@@ -2630,21 +2619,22 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			pts = [
 				new Vec2(r, 0),
 				new Vec2(w - r, 0),
-				...getArcPts(new Vec2(w - r, r), r, r, 270, 360),
+				...genArcPts(new Vec2(w - r, r), r, r, 270, 360),
 				new Vec2(w, r),
 				new Vec2(w, h - r),
-				...getArcPts(new Vec2(w - r, h - r), r, r, 0, 90),
+				...genArcPts(new Vec2(w - r, h - r), r, r, 0, 90),
 				new Vec2(w - r, h),
 				new Vec2(r, h),
-				...getArcPts(new Vec2(r, h - r), r, r, 90, 180),
+				...genArcPts(new Vec2(r, h - r), r, r, 90, 180),
 				new Vec2(0, h - r),
 				new Vec2(0, r),
-				...getArcPts(new Vec2(r, r), r, r, 180, 270),
+				...genArcPts(new Vec2(r, r), r, r, 180, 270),
 			]
 
 		}
 
-		drawPolygon(Object.assign({}, opt, {
+		drawPolygon({
+			...opt,
 			offset,
 			pts,
 			...(opt.gradient ? {
@@ -2660,7 +2650,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 					opt.gradient[1],
 				],
 			} : {}),
-		}))
+		})
 
 	}
 
@@ -2676,35 +2666,27 @@ export function createGame(gopt: CreateGameOpts = {}) {
 
 		// the displacement from the line end point to the corner point
 		const dis = p2.sub(p1).unit().normal().scale(w * 0.5)
+		const angle = p1.angle(p2) - 90
+		const r = w / 2
 
-		// calculate the 4 corner points of the line polygon
-		const verts = [
+		const pts = [
 			p1.sub(dis),
+			...(opt.cap === "round" ? genArcPts(p1, r, r, angle, angle + 180) : []),
 			p1.add(dis),
 			p2.add(dis),
+			...(opt.cap === "round" ? genArcPts(p2, r, r, angle + 180, angle + 360) : []),
 			p2.sub(dis),
-		].map((p) => ({
-			pos: new Vec2(p.x, p.y),
-			uv: new Vec2(0),
-			color: opt.color ?? Color.WHITE,
-			opacity: opt.opacity ?? 1,
-		}))
+		]
 
-		drawRaw(verts, [0, 1, 3, 1, 2, 3], gfx.defTex, opt.shader, opt.uniform)
-
-		// TODO: generate arc points instead of drawCircle
-		if (opt.cap === "round") {
-			drawCircle({
-				pos: p1,
-				radius: w / 2,
-				...opt,
-			})
-			drawCircle({
-				pos: p2,
-				radius: w / 2,
-				...opt,
-			})
-		}
+		drawPolygon({
+			...opt,
+			pts: pts,
+			fill: true,
+			outline: undefined,
+			pos: undefined,
+			angle: undefined,
+			scale: undefined,
+		})
 
 	}
 
@@ -2720,51 +2702,13 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			return
 		}
 
-		if (opt.radius && pts.length >= 3) {
-
-			// TODO: line joines
-			// TODO: rounded vertices for arbitury polygonic shape
-			let minSLen = pts[0].sdist(pts[1])
-
-			for (let i = 1; i < pts.length - 1; i++) {
-				minSLen = Math.min(pts[i].sdist(pts[i + 1]), minSLen)
-			}
-
-			// eslint-disable-next-line
-			const radius = Math.min(opt.radius, Math.sqrt(minSLen) / 2)
-
-			drawLine(Object.assign({}, opt, { p1: pts[0], p2: pts[1] }))
-
-			for (let i = 1; i < pts.length - 2; i++) {
-				const p1 = pts[i]
-				const p2 = pts[i + 1]
-				drawLine(Object.assign({}, opt, {
-					p1: p1,
-					p2: p2,
-				}))
-			}
-
-			drawLine(Object.assign({}, opt, {
-				p1: pts[pts.length - 2],
-				p2: pts[pts.length - 1],
-			}))
-
-		} else {
-
-			for (let i = 0; i < pts.length - 1; i++) {
-				drawLine(Object.assign({}, opt, {
-					p1: pts[i],
-					p2: pts[i + 1],
-				}))
-				// TODO: other line join types
-				if (opt.join !== "none") {
-					drawCircle(Object.assign({}, opt, {
-						pos: pts[i],
-						radius: opt.width ?? 1 / 2,
-					}))
-				}
-			}
-
+		for (let i = 0; i < pts.length - 1; i++) {
+			drawLine({
+				...opt,
+				p1: pts[i],
+				p2: pts[i + 1],
+				cap: opt.join,
+			})
 		}
 
 	}
@@ -2791,9 +2735,10 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		if (!opt.p1 || !opt.p2 || !opt.p3) {
 			throw new Error("drawTriangle() requires properties \"p1\", \"p2\" and \"p3\".")
 		}
-		return drawPolygon(Object.assign({}, opt, {
+		return drawPolygon({
+			...opt,
 			pts: [opt.p1, opt.p2, opt.p3],
-		}))
+		})
 	}
 
 	function drawCircle(opt: DrawCircleOpt) {
@@ -2806,11 +2751,12 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			return
 		}
 
-		drawEllipse(Object.assign({}, opt, {
+		drawEllipse({
+			...opt,
 			radiusX: opt.radius,
 			radiusY: opt.radius,
 			angle: 0,
-		}))
+		})
 
 	}
 
@@ -2828,7 +2774,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		const end = opt.end ?? 360
 		const offset = anchorPt(opt.anchor ?? "center").scale(new Vec2(-opt.radiusX, -opt.radiusY))
 
-		const pts = getArcPts(
+		const pts = genArcPts(
 			offset,
 			opt.radiusX,
 			opt.radiusY,
@@ -2840,7 +2786,8 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		// center
 		pts.unshift(offset)
 
-		const polyOpt = Object.assign({}, opt, {
+		const polyOpt = {
+			...opt,
 			pts,
 			radius: 0,
 			...(opt.gradient ? {
@@ -2849,19 +2796,21 @@ export function createGame(gopt: CreateGameOpts = {}) {
 					...Array(pts.length - 1).fill(opt.gradient[1]),
 				],
 			} : {}),
-		})
+		}
 
 		// full circle with outline shouldn't have the center point
 		if (end - start >= 360 && opt.outline) {
 			if (opt.fill !== false) {
-				drawPolygon(Object.assign({}, polyOpt, {
-					outline: null,
-				}))
+				drawPolygon({
+					...polyOpt,
+					outline: undefined,
+				})
 			}
-			drawPolygon(Object.assign({}, polyOpt, {
+			drawPolygon({
+				...polyOpt,
 				pts: pts.slice(1),
 				fill: false,
-			}))
+			})
 			return
 		}
 
@@ -2894,7 +2843,9 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			const verts = opt.pts.map((pt, i) => ({
 				pos: new Vec2(pt.x, pt.y),
 				uv: new Vec2(0, 0),
-				color: opt.colors ? (opt.colors[i] ? opt.colors[i].mult(color) : color) : color,
+				color: opt.colors
+					? (opt.colors[i] ? opt.colors[i].mult(color) : color)
+					: color,
 				opacity: opt.opacity ?? 1,
 			}))
 
@@ -3453,11 +3404,12 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return new Font(
 			font,
 			opt.size ?? DEF_TEXT_CACHE_SIZE,
-			Object.assign({}, {
+			{
 				width: 1,
 				color: new Color(0, 0, 0),
 				join: "none",
-			}, opt.outline),
+				...opt.outline,
+			},
 			opt.filter ?? DEF_FONT_FILTER,
 		)
 	}
