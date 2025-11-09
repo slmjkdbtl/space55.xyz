@@ -46,9 +46,9 @@ export function wave(
 	lo: number,
 	hi: number,
 	t: number,
-	f = (t: number) => -Math.cos(t)
+	f = (t: number) => (-Math.cos(t) + 1) / 2
 ): number {
-	return lo + (f(t) + 1) / 2 * (hi - lo)
+	return lo + f(t) * (hi - lo)
 }
 
 export function clamp(
@@ -668,26 +668,19 @@ export const rgb = overload3(() => {
 
 export const hsl = (h: number, s: number, l: number) => Color.fromHSL(h, s, l)
 
-export type Trail = {
-	push: (pos: Vec2) => void,
-	pts: Vec2[],
-	spacing: number,
-	max: number,
-}
+export function trail(spacing: number) {
 
-export function createTrail(spacing: number, max: number) {
-
-	const pts: Vec2[] = []
 	let lastPos: Vec2 | null = null
 	let leftover = 0
 
-	function push(pos: Vec2) {
+	return (pos: Vec2) => {
 
 		if (!lastPos) {
 			lastPos = pos.clone()
-			return
+			return []
 		}
 
+		const pts = []
 		const dx = pos.x - lastPos.x
 		const dy = pos.y - lastPos.y
 		const dist = Math.hypot(dx, dy)
@@ -708,29 +701,37 @@ export function createTrail(spacing: number, max: number) {
 
 		lastPos = pos.clone()
 
-		if (pts.length > max) {
-			pts.splice(0, pts.length - max)
-		}
+		return pts
 
 	}
 
+}
+
+export type Trail = {
+	step: (pos: Vec2) => void,
+	pts: Vec2[],
+	max: number,
+}
+
+export function createTrail(spacing: number, max: number): Trail {
+	const step2 = trail(spacing)
+	const pts: Vec2[] = []
+	function step(pos: Vec2) {
+		pts.push(...step2(pos))
+		if (pts.length > max) {
+			pts.splice(0, pts.length - max)
+		}
+	}
 	return {
+		step,
 		pts,
-		push,
 		get max() {
 			return max
 		},
 		set max(m: number) {
 			max = m
 		},
-		get spacing() {
-			return spacing
-		},
-		set spacing(s: number) {
-			spacing = s
-		},
 	}
-
 }
 
 export class Line {

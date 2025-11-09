@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import { h, css, csslib, js } from "www/html"
+import scripts from "./scripts"
 
 const files = await fs.readdir("files/littlesongs")
 const songs = files.sort().filter((f) => f.endsWith(".mp3"))
@@ -22,32 +23,16 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				"font-size": "14px",
 			},
 			"body": {
-				"padding": "16px",
+				"padding": "32px",
 				"font-family": "monospace",
-				"background": "#000000",
-				"color": "#ffffff",
-			},
-			"main": {
-				"max-width": "640px",
-				"width": "100%",
-				"margin": "32px auto",
-			},
-			"#title": {
-				"font-size": "1.4rem",
-			},
-			"#artist": {
-				"font-size": "1rem",
-			},
-			"#cover": {
-				"width": "100%",
-				"height": "auto",
-				"max-width": "240px",
+				"background": "#ffffff",
+				"color": "#000000",
 			},
 		})),
 	]),
 	h("body", {}, [
 		h("main", { class: "vstack g-16" }, [
-			h("img", { id: "cover", src: "/files/littlesongs/cover.png" }),
+			h("canvas", { id: "cover" }, []),
 			h("div", { class: "vstack g-4" }, [
 				h("p", { id: "title", }, "小歌曲 Little Songs"),
 				h("p", { id: "artist", }, "旋转笔 SpinPen"),
@@ -60,5 +45,6 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				])
 			})),
 		]),
+		h("script", {}, scripts.littlesongs),
 	]),
 ])

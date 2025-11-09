@@ -1,5 +1,7 @@
 // helper functions for creating canvas & webgl based games and toys
 
+// TODO: ui, flexbox style layout
+
 if (typeof window === "undefined") {
 	throw new Error("app.ts only runs in browser")
 }
@@ -27,7 +29,6 @@ import {
 	overload2,
 	deepEq,
 	getErrorMsg,
-	runes,
 } from "./utils"
 
 const DEF_WIDTH = 640
@@ -332,7 +333,6 @@ type DrawTextureOpt = RenderProps & {
 	tex: Texture,
 	width?: number,
 	height?: number,
-	tiled?: boolean,
 	flipX?: boolean,
 	flipY?: boolean,
 	quad?: Quad,
@@ -465,7 +465,6 @@ export type DrawSpriteOpt = RenderProps & {
 	frame?: number,
 	width?: number,
 	height?: number,
-	tiled?: boolean,
 	flipX?: boolean,
 	flipY?: boolean,
 	quad?: Quad,
@@ -476,7 +475,6 @@ export type DrawCanvasOpt = RenderProps & {
 	canvas: Canvas,
 	width?: number,
 	height?: number,
-	tiled?: boolean,
 	flipX?: boolean,
 	flipY?: boolean,
 	quad?: Quad,
@@ -580,7 +578,7 @@ export type BitmapFontData = {
 
 export type DrawTextOpt = RenderProps & {
 	text: string,
-	font?: string | Font | BitmapFontData,
+	font?: string | FontData | BitmapFontData,
 	size?: number,
 	align?: TextAlign,
 	width?: number,
@@ -656,7 +654,7 @@ export type LoadFontOpt = {
 	size?: number,
 }
 
-export class Font {
+export class FontData {
 	fontface: FontFace
 	filter: TexFilter = DEF_FONT_FILTER
 	size: number = DEF_TEXT_CACHE_SIZE
@@ -808,11 +806,10 @@ export class Texture {
 		this.width = w
 		this.height = h
 
-		// TODO: no default
 		const filter = {
 			"linear": gl.LINEAR,
 			"nearest": gl.NEAREST,
-		}[opt.filter ?? ctx.opts.texFilter ?? DEF_FILTER]
+		}[opt.filter ?? DEF_FILTER]
 
 		const wrap = {
 			"repeat": gl.REPEAT,
@@ -1269,9 +1266,7 @@ function genStack<T>(setFunc: (item: T | null) => void) {
 	return [push, pop, cur] as const
 }
 
-export function createGLCtx(gl: WebGLRenderingContext, opts: {
-	texFilter?: TexFilter,
-} = {}) {
+export function createGLCtx(gl: WebGLRenderingContext) {
 
 	const gc: Array<() => void> = []
 
@@ -1327,7 +1322,6 @@ export function createGLCtx(gl: WebGLRenderingContext, opts: {
 
 	return {
 		gl,
-		opts,
 		onDestroy,
 		destroy,
 		pushTexture2D,
@@ -1377,7 +1371,8 @@ export type AssetsEntries = {
 	sprites?: Record<string, Promise<SpriteData>>,
 	audio?: Record<string, Promise<AudioData>>,
 	sounds?: Record<string, Promise<SoundData>>,
-	fonts?: Record<string, Promise<BitmapFontData>>,
+	fonts?: Record<string, Promise<FontData>>,
+	bitmapFonts?: Record<string, Promise<BitmapFontData>>,
 	text?: Record<string, Promise<string>>,
 }
 
@@ -1389,7 +1384,8 @@ export type Assets = {
 	sprites: Record<string, SpriteData>,
 	audio: Record<string, AudioData>,
 	sounds: Record<string, SoundData>,
-	fonts: Record<string, BitmapFontData>,
+	fonts: Record<string, FontData>,
+	bitmapFonts: Record<string, BitmapFontData>,
 	text: Record<string, string>,
 	onReady: (action: () => void) => void,
 	then: (action: () => void) => void,
@@ -1403,7 +1399,8 @@ export function loadAssets(entries: AssetsEntries): Assets {
 	let sprites: Record<string, SpriteData> = {}
 	let audio: Record<string, AudioData> = {}
 	let sounds: Record<string, SoundData> = {}
-	let fonts: Record<string, BitmapFontData> = {}
+	let fonts: Record<string, FontData> = {}
+	let bitmapFonts: Record<string, BitmapFontData> = {}
 	let text: Record<string, string> = {}
 
 	async function loadMap<T>(map: Record<string, Promise<T>>): Promise<Record<string, T>> {
@@ -1435,7 +1432,10 @@ export function loadAssets(entries: AssetsEntries): Assets {
 		loadMap<SoundData>(entries.sounds ?? {}).then((s) => {
 			Object.assign(sounds, s)
 		}),
-		loadMap<BitmapFontData>(entries.fonts ?? {}).then((s) => {
+		loadMap<FontData>(entries.fonts ?? {}).then((s) => {
+			Object.assign(fonts, s)
+		}),
+		loadMap<BitmapFontData>(entries.bitmapFonts ?? {}).then((s) => {
 			Object.assign(fonts, s)
 		}),
 		loadMap<string>(entries.text ?? {}).then((s) => {
@@ -1460,12 +1460,13 @@ export function loadAssets(entries: AssetsEntries): Assets {
 		get ready() {
 			return numLoaded >= num
 		},
-		sprites: sprites,
-		audio: audio,
-		fonts: fonts,
-		text: text,
-		sounds: sounds,
-		onReady: onReady,
+		sprites,
+		audio,
+		fonts,
+		bitmapFonts,
+		text,
+		sounds,
+		onReady,
 		then: onReady,
 	}
 
@@ -1476,11 +1477,16 @@ export type CreateGameOpts = {
 	width?: number,
 	height?: number,
 	scale?: number,
-	touchToMouse?: boolean,
-	maxFPS?: number,
 	crisp?: boolean,
+	antialias?: boolean,
+	transparent?: number,
 	pixelDensity?: number,
-	background?: [number, number, number] | [number, number, number, number],
+	maxFPS?: number,
+	touchToMouse?: boolean,
+	allowScroll?: boolean,
+	globalMousePos?: boolean,
+	allowBackground?: boolean,
+	background?: [number, number, number],
 }
 
 export type GameCtx = ReturnType<typeof createGame>
@@ -1733,10 +1739,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 
 	}
 
-	function isTouchscreen() {
-		return ("ontouchstart" in window) || navigator.maxTouchPoints > 0
-	}
-
 	function mousePos(): Vec2 {
 		return app.mousePos.clone()
 	}
@@ -1937,38 +1939,64 @@ export function createGame(gopt: CreateGameOpts = {}) {
 	const docEvents: EventList<DocumentEventMap> = {}
 	const winEvents: EventList<WindowEventMap> = {}
 
-	canvasEvents.mousemove = (e) => {
-		const x = e.offsetX / gs
-		const y = e.offsetY / gs
-		const dx = e.movementX / gs
-		const dy = e.movementY / gs
-		const mousePos = new Vec2(x, y)
-		const mouseDeltaPos = new Vec2(dx, dy)
-		if (isFullscreen()) {
-			const cw = app.canvas.width
-			const ch = app.canvas.height
-			const ww = window.innerWidth
-			const wh = window.innerHeight
-			const rw = ww / wh
-			const rc = cw / ch
-			if (rw > rc) {
-				const ratio = wh / ch
-				const offset = (ww - (cw * ratio)) / 2
-				mousePos.x = map(x - offset, 0, cw * ratio, 0, cw)
-				mousePos.y = map(y, 0, ch * ratio, 0, ch)
-			} else {
-				const ratio = ww / cw
-				const offset = (wh - (ch * ratio)) / 2
-				mousePos.x = map(x , 0, cw * ratio, 0, cw)
-				mousePos.y = map(y - offset, 0, ch * ratio, 0, ch)
-			}
+	function fullscreenPt(p: Vec2) {
+		let x = p.x
+		let y = p.y
+		const gw = gfx.width
+		const gh = gfx.height
+		const ww = window.innerWidth / gs
+		const wh = window.innerHeight / gs
+		const rw = ww / wh
+		const rc = gw / gh
+		if (rw > rc) {
+			const ratio = wh / gh
+			const offset = (ww - (gw * ratio)) / 2
+			x = map(x - offset, 0, gw * ratio, 0, gw)
+			y = map(y, 0, gh * ratio, 0, gh)
+		} else {
+			const ratio = ww / gw
+			const offset = (wh - (gh * ratio)) / 2
+			x = map(x, 0, gw * ratio, 0, gw)
+			y = map(y - offset, 0, gh * ratio, 0, gh)
 		}
-		app.events.input.addOnce(() => {
-			app.isMouseMoved = true
-			app.mousePos = mousePos
-			app.mouseDeltaPos = mouseDeltaPos
-			app.events.mouseMove.trigger()
-		})
+		return new Vec2(x, y)
+	}
+
+	if (gopt.globalMousePos) {
+		docEvents.mousemove = (e) => {
+			const rect = canvas.getBoundingClientRect()
+			let pos = new Vec2(
+				(e.clientX - rect.x) / gs,
+				(e.clientY - rect.y) / gs,
+			)
+			const dx = e.movementX / gs
+			const dy = e.movementY / gs
+			if (isFullscreen()) {
+				pos = fullscreenPt(pos)
+			}
+			app.events.input.addOnce(() => {
+				app.isMouseMoved = true
+				app.mousePos = pos
+				app.mouseDeltaPos = new Vec2(dx, dy)
+				app.events.mouseMove.trigger()
+			})
+
+		}
+	} else {
+		canvasEvents.mousemove = (e) => {
+			let pos = new Vec2(e.offsetX / gs, e.offsetY / gs)
+			const dx = e.movementX / gs
+			const dy = e.movementY / gs
+			if (isFullscreen()) {
+				pos = fullscreenPt(pos)
+			}
+			app.events.input.addOnce(() => {
+				app.isMouseMoved = true
+				app.mousePos = pos
+				app.mouseDeltaPos = new Vec2(dx, dy)
+				app.events.mouseMove.trigger()
+			})
+		}
 	}
 
 	const MOUSE_BUTTONS: MouseButton[] = [
@@ -2047,7 +2075,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		})
 	}
 
-
 	canvasEvents.touchstart = (e) => {
 		// disable long tap context menu
 		e.preventDefault()
@@ -2124,9 +2151,10 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		})
 	}
 
-	// TODO: option to not prevent default?
 	canvasEvents.wheel = (e) => {
-		e.preventDefault()
+		if (gopt.allowScroll !== true) {
+			e.preventDefault()
+		}
 		app.events.input.addOnce(() => {
 			app.events.scroll.trigger(new Vec2(e.deltaX, e.deltaY))
 		})
@@ -2180,9 +2208,9 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		for (const entry of entries) {
 			if (entry.target !== app.canvas) continue
 			if (
-				app.lastWidth === app.canvas.offsetWidth
-				&& app.lastHeight === app.canvas.offsetHeight
-			) return
+				app.lastWidth === app.canvas.offsetWidth &&
+				app.lastHeight === app.canvas.offsetHeight
+			) continue
 			app.lastWidth = app.canvas.offsetWidth
 			app.lastHeight = app.canvas.offsetHeight
 			app.events.input.addOnce(() => {
@@ -2194,10 +2222,11 @@ export function createGame(gopt: CreateGameOpts = {}) {
 	resizeObserver.observe(app.canvas)
 
 	const gl = canvas.getContext("webgl2", {
-		antialias: true,
+		antialias: gopt.antialias,
 		depth: true,
 		stencil: true,
-		alpha: true,
+		alpha: gopt.transparent,
+		premultipliedAlpha: false,
 		preserveDrawingBuffer: true,
 	}) as WebGLRenderingContext
 
@@ -2246,12 +2275,11 @@ export function createGame(gopt: CreateGameOpts = {}) {
 
 		if (gopt.background) {
 			bgColor = Color.fromArray(gopt.background)
-			bgAlpha = gopt.background[3] ?? 1
 			gl.clearColor(
 				bgColor.r / 255,
 				bgColor.g / 255,
 				bgColor.b / 255,
-				bgAlpha ?? 1,
+				gopt.transparent ? 0 : 1,
 			)
 		}
 
@@ -2479,53 +2507,26 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		const h = opt.tex.height * q.h
 		const scale = new Vec2(1)
 
-		if (opt.tiled) {
-
-			// TODO: draw fract
-			const repX = Math.ceil((opt.width || w) / w)
-			const repY = Math.ceil((opt.height || h) / h)
-			const anchor = anchorPt(opt.anchor || DEF_ANCHOR).add(new Vec2(1, 1)).scale(0.5)
-			const offset = anchor.scale(new Vec2(repX * w, repY * h))
-
-			// TODO: rotation
-			for (let i = 0; i < repX; i++) {
-				for (let j = 0; j < repY; j++) {
-					drawUVQuad({
-						...opt,
-						pos: (opt.pos || new Vec2(0)).add(new Vec2(w * i, h * j)).sub(offset),
-						scale: scale.scale(opt.scale || new Vec2(1)),
-						tex: opt.tex,
-						quad: q,
-						width: w,
-						height: h,
-						anchor: "topleft",
-					})
-				}
-			}
-		} else {
-
-			// TODO: should this ignore scale?
-			if (opt.width && opt.height) {
-				scale.x = opt.width / w
-				scale.y = opt.height / h
-			} else if (opt.width) {
-				scale.x = opt.width / w
-				scale.y = scale.x
-			} else if (opt.height) {
-				scale.y = opt.height / h
-				scale.x = scale.y
-			}
-
-			drawUVQuad({
-				...opt,
-				scale: scale.scale(opt.scale || new Vec2(1)),
-				tex: opt.tex,
-				quad: q,
-				width: w,
-				height: h,
-			})
-
+		// TODO: should this ignore scale?
+		if (opt.width && opt.height) {
+			scale.x = opt.width / w
+			scale.y = opt.height / h
+		} else if (opt.width) {
+			scale.x = opt.width / w
+			scale.y = scale.x
+		} else if (opt.height) {
+			scale.y = opt.height / h
+			scale.x = scale.y
 		}
+
+		drawUVQuad({
+			...opt,
+			scale: scale.scale(opt.scale || new Vec2(1)),
+			tex: opt.tex,
+			quad: q,
+			width: w,
+			height: h,
+		})
 
 	}
 
@@ -2849,7 +2850,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 				opacity: opt.opacity ?? 1,
 			}))
 
-			// TODO: better triangulation
 			const indices = [...Array(npts - 2).keys()]
 				.map((n) => [0, n + 1, n + 2])
 				.flat()
@@ -2931,12 +2931,12 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		let font = opt.font ?? DEF_FONT
 
 		const { charStyleMap, text } = compileStyledText(opt.text + "")
-		const chars = runes(text)
+		const chars = text.split("")
 
 		// if it's not bitmap font, we draw it with 2d canvas or use cached image
-		if (font instanceof Font || typeof font === "string") {
+		if (font instanceof FontData || typeof font === "string") {
 
-			const [ fontName, outline, filter ] = font instanceof Font
+			const [ fontName, outline, filter ] = font instanceof FontData
 				? [ font.fontface.family, font.outline, font.filter ]
 				: [ font, null, DEF_FONT_FILTER ]
 
@@ -3294,7 +3294,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		flush()
 		gfx.lastDrawCalls = gfx.renderer.numDraws
 		gfx.frameBuffer.unbind()
-		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight)
 
 		drawTexture({
 			flipY: true,
@@ -3327,7 +3326,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return frames
 	}
 
-	// TODO: how to support texture opt here?
+	// TODO: support texture opt here?
 	async function loadSprite(src: string, opt: LoadSpriteOpt = {}): Promise<SpriteData> {
 		const img = await loadImg(src)
 		const [tex, quad] = packer.add(img)
@@ -3394,14 +3393,14 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		name: string,
 		src: string | BufferSource,
 		opt: LoadFontOpt = {},
-	): Promise<Font> {
-		const font = new FontFace(name, src)
+	): Promise<FontData> {
+		const font = new FontFace(name, `url("${src}")`)
 		await font.load()
 		document.fonts.add(font)
 		if (opt.size && opt.size > MAX_TEXT_CACHE_SIZE) {
 			throw new Error(`exceeds max font size: ${opt.size} > ${MAX_TEXT_CACHE_SIZE}`)
 		}
-		return new Font(
+		return new FontData(
 			font,
 			opt.size ?? DEF_TEXT_CACHE_SIZE,
 			{
@@ -3518,6 +3517,53 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return audio.masterNode.gain.value
 	}
 
+	type Scene = {
+		update: () => void,
+		start: (prev: string | null) => void,
+		end: (next: string | null) => void,
+	}
+
+	function createScenes(names: string[]) {
+		let curScene: string | null = null
+		const scenes: Record<string, Scene> = {}
+		for (const name of names) {
+			scenes[name] = {
+				update: () => {},
+				start: () => {},
+				end: () => {},
+			}
+		}
+		function onStart(name: string, action: () => void) {
+			scenes[name].start = action
+		}
+		function onEnd(name: string, action: () => void) {
+			scenes[name].end = action
+		}
+		function onUpdate(name: string, action: () => void) {
+			scenes[name].update = action
+		}
+		// TODO: custom fades, individual canvas for each scene?
+		function change(name: string) {
+			const prev = curScene ?? null
+			if (prev) {
+				scenes[prev].end(name)
+			}
+			curScene = name
+			scenes[curScene].start(prev)
+		}
+		function update() {
+			if (!curScene) return
+			scenes[curScene].update()
+		}
+		return {
+			onStart,
+			onEnd,
+			onUpdate,
+			change,
+			update,
+		}
+	}
+
 	return {
 
 		dt,
@@ -3538,7 +3584,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		getCursor,
 		setCursorLocked,
 		isCursorLocked,
-		isTouchscreen,
 		mousePos,
 		mouseDeltaPos,
 		isKeyDown,
@@ -3589,9 +3634,11 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		drawLines,
 		drawCurve,
 		drawText,
+		drawFormattedText,
 		drawStenciled,
 		drawMasked,
 		drawSubtracted,
+		formatText,
 		pushTransform,
 		popTransform,
 		pushTranslate,
@@ -3607,6 +3654,8 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		tween: tween2,
 		wait: wait2,
 		loop: loop2,
+
+		createScenes,
 
 		ASCII_CHARS,
 
