@@ -160,7 +160,7 @@ export function mapValues<A, B>(obj: Record<string, A>, mapFn: (v: A) => B) {
 
 export type KV = Record<string, string | boolean | number>
 
-export function buildKV(props: KV) {
+export function kv(props: KV) {
 	return Object.entries(props)
 		.filter(([k, v]) => v)
 		.map(([k, v]) => v === true ? k : `${k}=${v}`)
@@ -306,4 +306,11 @@ export function isPromise(value: any): value is Promise<any> {
 
 export function getErrorMsg(error: unknown) {
 	return (error instanceof Error) ? error.message : String(error)
+}
+
+export function download(filename: string, url: string) {
+	const a = document.createElement("a")
+	a.href = url
+	a.download = filename
+	a.click()
 }

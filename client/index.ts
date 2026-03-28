@@ -1,3 +1,7 @@
+import {
+	mapc,
+} from "www/math"
+
 function preload(url: string) {
 	const img = new Image()
 	img.src = url
@@ -15,9 +19,6 @@ if (flower) {
 	})
 }
 
-const map = (v: number, l1: number, h1: number, l2: number, h2: number): number =>
-	l2 + (v - l1) * (h2 - l2) / (h1 - l1)
-
 const eye = document.querySelector<HTMLImageElement>("#eye")
 
 // TODO: doesn't work when cursor is above
@@ -29,7 +30,8 @@ if (eye) {
 		const [dx, dy] = [e.clientX - origEyePos.x, e.clientY - origEyePos.y]
 		const dis = Math.sqrt(dx * dx + dy * dy)
 		const [ux, uy] = [dx / dis, dy / dis]
-		const d = map(dis, 0, 100, 0, 1)
-		eye.style["transform"] = `translate(${ux * d}px, ${uy * d * (dy < 0 ? 5 : 1)}px)`
+		// const d = mapc(dis, 0, 100, 0, 3)
+		const d = 3
+		eye.style["transform"] = `translate(${ux * d}px, ${uy * d}px)`
 	})
 }

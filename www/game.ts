@@ -20,7 +20,7 @@ import {
 	tween,
 	wait,
 	loop,
-	Timer,
+	TimerManager,
 } from "./math"
 
 import {
@@ -29,6 +29,7 @@ import {
 	overload2,
 	deepEq,
 	getErrorMsg,
+	download,
 } from "./utils"
 
 const DEF_WIDTH = 640
@@ -1436,7 +1437,7 @@ export function loadAssets(entries: AssetsEntries): Assets {
 			Object.assign(fonts, s)
 		}),
 		loadMap<BitmapFontData>(entries.bitmapFonts ?? {}).then((s) => {
-			Object.assign(fonts, s)
+			Object.assign(bitmapFonts, s)
 		}),
 		loadMap<string>(entries.text ?? {}).then((s) => {
 			Object.assign(text, s)
@@ -1521,6 +1522,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		"cursor: default",
 	]
 
+	// TODO: respect original css size like 100%
 	styles.push(`width: ${gw * gs}px`)
 	styles.push(`height: ${gh * gs}px`)
 
@@ -1577,6 +1579,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 			show: new Event<void>(),
 			resize: new Event<void>(),
 			input: new Event<void>(),
+			frameEnd: new Event<void>(),
 		},
 	}
 
@@ -1608,8 +1611,10 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return app.numFrames
 	}
 
-	function screenshot(): string {
-		return app.canvas.toDataURL()
+	function screenshot() {
+		app.events.frameEnd.addOnce(() => {
+			download("screenshot.png", app.canvas.toDataURL())
+		})
 	}
 
 	function setCursor(c: Cursor): void {
@@ -1661,23 +1666,23 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		resizeObserver.disconnect()
 	}
 
-	let timers: Timer[] = []
+	let timers = new TimerManager()
 
 	function tween2<T extends LerpValue>(...args: Parameters<typeof tween<T>>) {
 		let t = tween(...args)
-		timers.push(t)
+		timers.add(t)
 		return t
 	}
 
 	function wait2(...args: Parameters<typeof wait>) {
 		let t = wait(...args)
-		timers.push(t)
+		timers.add(t)
 		return t
 	}
 
 	function loop2(...args: Parameters<typeof loop>) {
 		let t = loop(...args)
-		timers.push(t)
+		timers.add(t)
 		return t
 	}
 
@@ -1719,15 +1724,11 @@ export function createGame(gopt: CreateGameOpts = {}) {
 				app.numFrames++
 				processInput()
 				frameStart()
-
-				for (const t of timers) {
-					t.update(app.dt)
-				}
-
-				timers = timers.filter((t) => !t.done)
+				timers.update(app.dt)
 				action()
 				frameEnd()
 				resetInput()
+				app.events.frameEnd.trigger()
 
 			}
 
@@ -1939,13 +1940,20 @@ export function createGame(gopt: CreateGameOpts = {}) {
 	const docEvents: EventList<DocumentEventMap> = {}
 	const winEvents: EventList<WindowEventMap> = {}
 
+	// TODO: cache this
+	function getScale() {
+		const rect = canvas.getBoundingClientRect()
+		return new Vec2(rect.width / gfx.width, rect.height / gfx.height)
+	}
+
 	function fullscreenPt(p: Vec2) {
+		const s = getScale()
 		let x = p.x
 		let y = p.y
 		const gw = gfx.width
 		const gh = gfx.height
-		const ww = window.innerWidth / gs
-		const wh = window.innerHeight / gs
+		const ww = window.innerWidth / s.x
+		const wh = window.innerHeight / s.y
 		const rw = ww / wh
 		const rc = gw / gh
 		if (rw > rc) {
@@ -1964,13 +1972,14 @@ export function createGame(gopt: CreateGameOpts = {}) {
 
 	if (gopt.globalMousePos) {
 		docEvents.mousemove = (e) => {
+			const s = getScale()
 			const rect = canvas.getBoundingClientRect()
 			let pos = new Vec2(
-				(e.clientX - rect.x) / gs,
-				(e.clientY - rect.y) / gs,
+				(e.clientX - rect.x) / s.x,
+				(e.clientY - rect.y) / s.y,
 			)
-			const dx = e.movementX / gs
-			const dy = e.movementY / gs
+			const dx = e.movementX / s.x
+			const dy = e.movementY / s.y
 			if (isFullscreen()) {
 				pos = fullscreenPt(pos)
 			}
@@ -1984,9 +1993,10 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		}
 	} else {
 		canvasEvents.mousemove = (e) => {
-			let pos = new Vec2(e.offsetX / gs, e.offsetY / gs)
-			const dx = e.movementX / gs
-			const dy = e.movementY / gs
+			const s = getScale()
+			let pos = new Vec2(e.offsetX / s.x, e.offsetY / s.y)
+			const dx = e.movementX / s.x
+			const dy = e.movementY / s.y
 			if (isFullscreen()) {
 				pos = fullscreenPt(pos)
 			}
@@ -2076,57 +2086,62 @@ export function createGame(gopt: CreateGameOpts = {}) {
 	}
 
 	canvasEvents.touchstart = (e) => {
-		// disable long tap context menu
-		e.preventDefault()
+		if (gopt.allowScroll !== true) {
+			e.preventDefault()
+		}
 		app.events.input.addOnce(() => {
+			const s = getScale()
 			const touches = Array.from(e.changedTouches)
 			const box = app.canvas.getBoundingClientRect()
 			if (gopt.touchToMouse !== false) {
 				app.mousePos = new Vec2(
-					touches[0].clientX / gs - box.x,
-					touches[0].clientY / gs - box.y,
+					touches[0].clientX / s.x - box.x,
+					touches[0].clientY / s.y - box.y,
 				)
 				app.mouseState.press("left")
 				app.events.mousePress.trigger("left")
 			}
 			touches.forEach((t) => {
 				app.events.touchStart.trigger(
-					[new Vec2(t.clientX / gs - box.x, t.clientY / gs - box.y), t],
+					[new Vec2(t.clientX / s.x - box.x, t.clientY / s.y - box.y), t],
 				)
 			})
 		})
 	}
 
 	canvasEvents.touchmove = (e) => {
-		// disable scrolling
-		e.preventDefault()
+		if (gopt.allowScroll !== true) {
+			e.preventDefault()
+		}
 		app.events.input.addOnce(() => {
+			const s = getScale()
 			const touches = Array.from(e.changedTouches)
 			const box = app.canvas.getBoundingClientRect()
 			if (gopt.touchToMouse !== false) {
 				const lastMousePos = app.mousePos
 				app.mousePos = new Vec2(
-					touches[0].clientX / gs - box.x,
-					touches[0].clientY / gs - box.y,
+					touches[0].clientX / s.x - box.x,
+					touches[0].clientY / s.y - box.y,
 				)
 				app.mouseDeltaPos = app.mousePos.sub(lastMousePos)
 				app.events.mouseMove.trigger()
 			}
 			touches.forEach((t) => {
 				app.events.touchMove.trigger(
-					[new Vec2(t.clientX / gs - box.x, t.clientY / gs - box.y), t],
+					[new Vec2(t.clientX / s.x - box.x, t.clientY / s.y - box.y), t],
 				)
 			})
 		})
 	}
 
 	function handleTouchEnd(e: TouchEvent) {
+		const s = getScale()
 		const touches = Array.from(e.changedTouches)
 		const box = app.canvas.getBoundingClientRect()
 		if (gopt.touchToMouse !== false) {
 			app.mousePos = new Vec2(
-				touches[0].clientX / gs - box.x,
-				touches[0].clientY / gs - box.y,
+				touches[0].clientX / s.x - box.x,
+				touches[0].clientY / s.y - box.y,
 			)
 			app.mouseDeltaPos = new Vec2(0,0)
 			app.mouseState.release("left")
@@ -2134,7 +2149,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		}
 		touches.forEach((t) => {
 			app.events.touchEnd.trigger(
-				[new Vec2(t.clientX / gs - box.x, t.clientY / gs - box.y), t],
+				[new Vec2(t.clientX / s.x - box.x, t.clientY / s.y - box.y), t],
 			)
 		})
 	}
@@ -2226,7 +2241,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		depth: true,
 		stencil: true,
 		alpha: gopt.transparent,
-		premultipliedAlpha: false,
+		// premultipliedAlpha: false,
 		preserveDrawingBuffer: true,
 	}) as WebGLRenderingContext
 
@@ -3517,53 +3532,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return audio.masterNode.gain.value
 	}
 
-	type Scene = {
-		update: () => void,
-		start: (prev: string | null) => void,
-		end: (next: string | null) => void,
-	}
-
-	function createScenes(names: string[]) {
-		let curScene: string | null = null
-		const scenes: Record<string, Scene> = {}
-		for (const name of names) {
-			scenes[name] = {
-				update: () => {},
-				start: () => {},
-				end: () => {},
-			}
-		}
-		function onStart(name: string, action: () => void) {
-			scenes[name].start = action
-		}
-		function onEnd(name: string, action: () => void) {
-			scenes[name].end = action
-		}
-		function onUpdate(name: string, action: () => void) {
-			scenes[name].update = action
-		}
-		// TODO: custom fades, individual canvas for each scene?
-		function change(name: string) {
-			const prev = curScene ?? null
-			if (prev) {
-				scenes[prev].end(name)
-			}
-			curScene = name
-			scenes[curScene].start(prev)
-		}
-		function update() {
-			if (!curScene) return
-			scenes[curScene].update()
-		}
-		return {
-			onStart,
-			onEnd,
-			onUpdate,
-			change,
-			update,
-		}
-	}
-
 	return {
 
 		dt,
@@ -3654,8 +3622,6 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		tween: tween2,
 		wait: wait2,
 		loop: loop2,
-
-		createScenes,
 
 		ASCII_CHARS,
 

@@ -1393,7 +1393,9 @@ export const easings = {
 
 export type Timer = {
 	update: (dt: number) => void,
+	cancel: () => void,
 	done: boolean,
+	paused: boolean,
 }
 
 export function tween<V extends LerpValue>(
@@ -1490,6 +1492,7 @@ export function wait(t: number, action?: () => void) {
 
 export function loop(t: number, action: () => void) {
 	let cancelled = false
+	const onEndEvents: Array<() => void> = []
 	const newAction = () => {
 		if (cancelled) return
 		action()
@@ -1514,5 +1517,19 @@ export function loop(t: number, action: () => void) {
 		get done() {
 			return cancelled
 		},
+	}
+}
+
+export class TimerManager {
+	#timers: Timer[] = []
+	add<T extends Timer>(t: T): T {
+		this.#timers.push(t)
+		return t
+	}
+	update(dt: number) {
+		for (const t of this.#timers) {
+			t.update(dt)
+		}
+		this.#timers = this.#timers.filter((t) => !t.done)
 	}
 }

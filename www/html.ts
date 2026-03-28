@@ -349,6 +349,7 @@ for (let i = 1; i <= 64; i++) {
 	c[`colw-${px}`] = { "grid-template-columns": `repeat(auto-fill, minmax(min(100%, ${px}px), 1fr))` }
 }
 
+// TODO: name
 export function cc(styles: string[] | string) {
 	if (typeof styles === "string") {
 		return cc(styles.split(" "))

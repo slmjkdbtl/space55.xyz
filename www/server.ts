@@ -10,22 +10,16 @@ import * as sqlite from "bun:sqlite"
 
 import {
 	isDev,
-	Registry,
-	Event,
-	EventController,
-	mapValues,
 	ansi,
 	fmtBytes,
 	mapAsync,
-	isPromise,
 	KV,
 	parseKV,
-	buildKV,
+	kv,
 } from "./utils"
 
 import {
 	h,
-	style,
 	css,
 } from "./html"
 
@@ -174,7 +168,7 @@ function createRes(req: Req): Res {
 	function send(b?: BodyInit | null, opt: ResOpt = {}) {
 		body = b ?? body
 		status = opt.status ?? status
-		headers.set("Set-Cookie", buildKV(cookies))
+		headers.set("Set-Cookie", kv(cookies))
 		if (opt.headers) {
 			for (const k in opt.headers) {
 				headers.set(k, opt.headers[k])
@@ -201,7 +195,7 @@ function createRes(req: Req): Res {
 	async function sendFile(p: string, opt: SendFileOpt & ResOpt = {}) {
 		const file = Bun.file(p)
 		if (!await file.exists()) {
-			throw new HTTPError(404, "not found")
+			throw new HTTPError(404, `file not found: ${p}`)
 		}
 		const range = req.headers.get("Range")
 		if (range) {
@@ -343,34 +337,6 @@ export function createServer(opts: ServerOpts = {}) {
 
 }
 
-export function matchPath(pat: string, url: string): Record<string, string> | null {
-
-	pat = pat.replace(/\/$/, "")
-	url = url.replace(/\/$/, "")
-
-	if (pat === url) return {}
-
-	const vars = pat.match(/:[^\/]+/g) || []
-	let regStr = pat
-
-	for (const v of vars) {
-		const name = v.substring(1)
-		regStr = regStr.replace(v, `(?<${name}>[^\/]+)`)
-	}
-
-	regStr = "^" + regStr + "$"
-
-	const reg = new RegExp(regStr)
-	const matches = reg.exec(url)
-
-	if (matches) {
-		return { ...matches.groups }
-	} else {
-		return null
-	}
-
-}
-
 export type HTTPMethod =
 	| "GET"
 	| "HEAD"
@@ -405,6 +371,7 @@ export function createRouter(): Router {
 	function mount(prefix: string = ""): Handler {
 		return async (ctx, next) => {
 			const { req, res } = ctx
+			const url = trimSlashEnd(req.url.toString())
 			let method = req.method.toUpperCase()
 			if (method === "HEAD") {
 				method = "GET"
@@ -416,9 +383,13 @@ export function createRouter(): Router {
 				) {
 					continue
 				}
-				const match = matchPath(prefix + route.path, decodeURI(req.url.pathname))
+				// TODO: cache this
+				const pat = new URLPattern({
+					pathname: trimSlashEnd(prefix + route.path),
+				})
+				const match = pat.exec(url)
 				if (match) {
-					ctx.req.params = match
+					ctx.req.params = match.pathname.groups as Record<string, string>
 					return await route.handler(ctx, next)
 				}
 			}
@@ -437,12 +408,13 @@ export const route = (method: HTTPMethod, path: string, handler: Handler) => {
 	return r.mount()
 }
 
-const trimSlashes = (str: string) => str.replace(/\/*$/, "").replace(/^\/*/, "")
+export const trimSlashEnd = (p: string) => p === "/" ? p : p.replace(/\/*$/, "")
+export const trimSlashes = (p: string) => p.replace(/\/*$/, "").replace(/^\/*/, "")
 
 export function files(route = "", root = ""): Handler {
+	route = trimSlashes(route)
 	return async ({ req, res }, next) => {
-		route = trimSlashes(route)
-		const pathname = trimSlashes(decodeURI(req.url.pathname))
+		const pathname = trimSlashes(decodeURIComponent(req.url.pathname))
 		if (!pathname.startsWith(route)) return await next()
 		const baseDir = "./" + trimSlashes(root)
 		const relativeURLPath = pathname.replace(new RegExp(`^${route}/?`), "")
@@ -781,7 +753,7 @@ export function toHTTPDate(d: Date) {
 	return d.toUTCString()
 }
 
-// TODO: is there a way to get bun calculated Content-Length result?
+// TODO: is there a way to get Content-Length calculated by bun?
 export function getBodySize(body: BodyInit) {
 	if (typeof body === "string") {
 		return Buffer.byteLength(body)
@@ -858,20 +830,18 @@ export async function getReqJSON<T = any>(req: Request): Promise<T> {
 	}
 }
 
-export function getFormText(form: FormData, key: string): string | null {
+export function getFormText(form: FormData, key: string): string | undefined {
 	const t = form.get(key)
 	if (typeof t === "string") {
 		return t
 	}
-	return null
 }
 
-export function getFormBlob(form: FormData, key: string): Blob | null {
+export function getFormBlob(form: FormData, key: string): Blob | undefined {
 	const b = form.get(key)
 	if (b && b instanceof Blob && b.size > 0) {
 		return b
 	}
-	return null
 }
 
 export async function getFormBlobData(form: FormData, key: string) {

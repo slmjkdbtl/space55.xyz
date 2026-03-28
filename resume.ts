@@ -227,7 +227,8 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			]),
 			h("div", { class: "section" }, [
 				h("h1", {}, "Music"),
-				h("p", { class: "desc" }, "I play tenor saxophone, and some trumpet, flute and bass. Mostly in the free jazz / improv scene. You can find some videos of my performances <a href=\"/files/music\">here</a>."),
+				h("p", { class: "desc" }, "You can find my music on <a href=\"https://slmjkdbtl.bandcamp.com/album/little-songs\">Bandcamp</a>."),
+				h("p", { class: "desc" }, "I also play saxophone in the free jazz / improv scene. You can find some videos of my performances <a href=\"/files/music\">here</a>."),
 			]),
 		]),
 	]),

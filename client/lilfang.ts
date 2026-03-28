@@ -21,6 +21,8 @@ import {
 	choose,
 	Trail,
 	createTrail,
+	tween,
+	TimerManager,
 } from "www/math"
 
 const WIDTH = 200
@@ -29,7 +31,7 @@ const SCALE = 2
 const G = 300
 const ANIM_FPS = 8
 const MAX_LILFANG_POS_HIST = 48
-const BG_TIME = 2
+const BG_TIME = 7
 const BG_TRANSITION = 1
 const R = "/static/lilfang"
 const TRAIL_SPACE = 12
@@ -70,6 +72,16 @@ function anim(name: string, animName?: string) {
 	}
 }
 
+function anim2(name: string, animName?: string) {
+	const spr = assets.sprites[name]
+	const anim = animName ? spr.anims[animName] : null
+	if (anim) {
+		return anim.from + Math.floor(g.time() * 4 % (anim.to - anim.from))
+	} else {
+		return Math.floor(g.time() * 4 % spr.frames.length)
+	}
+}
+
 const assets = loadAssets({
 	sprites: {
 		lilfang: g.loadSpritesAnim(seq(`${R}/lilfang_head-?.png`, 3)),
@@ -88,6 +100,7 @@ const assets = loadAssets({
 		hairband: g.loadSprite(`${R}/hairband.png`),
 		bg: g.loadSpritesAnim(seq(`${R}/bg-?.jpg`, 10)),
 		photo: g.loadSprite(`${R}/lilfang.png`),
+		message: g.loadSpritesAnim(seq(`${R}/message-?.png`, 2)),
 	},
 	audio: {
 		song: g.loadAudio(`${R}/song.mp3`),
@@ -265,7 +278,7 @@ function drawProgress(p: number) {
 	})
 }
 
-const scene = g.createScenes(["main", "end"])
+const scene = createScenes(["main", "end"])
 
 scene.onStart("main", () => {
 	// TODO
@@ -328,6 +341,8 @@ scene.onUpdate("main", () => {
 	crazyIntensity = lerp(crazyIntensity, crazy ? 1 : 0, dt * 1.0)
 
 	bgCanvas.draw(() => {
+
+		bgCanvas.clear()
 
 		g.drawSprite({
 			sprite: bgSprite,
@@ -463,7 +478,8 @@ scene.onUpdate("main", () => {
 	g.drawSprite({
 		pos: crazy ? shake(btfly.pos) : btfly.pos,
 		angle: btfly.angle + 90,
-		sprite: assets.sprites["btfly"], frame: anim("btfly"),
+		sprite: assets.sprites["btfly"],
+		frame: anim("btfly"),
 		anchor: "center",
 	})
 
@@ -493,22 +509,12 @@ scene.onUpdate("main", () => {
 })
 
 scene.onUpdate("end", () => {
-	const w = 0.6
 	g.drawSprite({
-		sprite: assets.sprites["photo"],
-		pos: vec2(g.width() * (1 - w) * 0.5, 24),
-		width: g.width() * w,
+		sprite: assets.sprites["message"],
+		frame: anim("message"),
+		width: g.width(),
+		height: g.height(),
 	})
-	const t = g.formatText({
-		text: "小芳\n2019.08.15 - 2020.11.20",
-		font: "fusion",
-		align: "center",
-		size: 10,
-	})
-	g.pushTransform()
-	g.pushTranslate(vec2((g.width() - t.width) / 2, 160))
-	g.drawFormattedText(t)
-	g.popTransform()
 })
 
 function drawLilFang(opt: {
@@ -600,6 +606,70 @@ g.run(() => {
 		scene.change("end")
 	}
 
+	if (g.isKeyPressed("s")) {
+		g.screenshot()
+	}
+
 	scene.update()
 
 })
+
+type Scene = {
+	update: () => void,
+	start: (prev: string | null) => void,
+	end: (next: string | null) => void,
+}
+
+// TODO: make a decent scene manager
+function createScenes(names: string[]) {
+	let t = 0
+	let curScene: string | null = null
+	const scenes: Record<string, Scene> = {}
+	const timers = new TimerManager()
+	for (const name of names) {
+		scenes[name] = {
+			update: () => {},
+			start: () => {},
+			end: () => {},
+		}
+	}
+	function onStart(name: string, action: () => void) {
+		scenes[name].start = action
+	}
+	function onEnd(name: string, action: () => void) {
+		scenes[name].end = action
+	}
+	function onUpdate(name: string, action: () => void) {
+		scenes[name].update = action
+	}
+	// TODO: custom transition
+	async function change(name: string) {
+		const prev = curScene ?? null
+		if (prev) {
+			await timers.add(tween(t, 1, 0.5, (x) => t = x))
+			scenes[prev].end(name)
+		}
+		curScene = name
+		scenes[curScene].start(prev)
+		await timers.add(tween(t, 0, 0.5, (x) => t = x))
+	}
+	function update() {
+		if (!curScene) return
+		const s = scenes[curScene]
+		timers.update(g.dt())
+		s.update()
+		g.drawRect({
+			width: g.width(),
+			height: g.height(),
+			color: new Color(0, 0, 0),
+			opacity: t,
+		})
+	}
+	return {
+		onStart,
+		onEnd,
+		onUpdate,
+		change,
+		update,
+	}
+}

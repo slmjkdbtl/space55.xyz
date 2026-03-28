@@ -6,6 +6,11 @@ import scripts from "./scripts"
 const files = await fs.readdir("files/littlesongs")
 const songs = files.sort().filter((f) => f.endsWith(".mp3"))
 
+const links = [
+	{ name: "bandcamp", url: "https://slmjkdbtl.bandcamp.com/album/little-songs" },
+	{ name: "netease", url: "https://music.163.com/album?id=287341027" },
+]
+
 export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("head", {}, [
 		h("title", {}, "小歌曲 Little Songs"),
@@ -27,6 +32,14 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				"font-family": "monospace",
 				"background": "#ffffff",
 				"color": "#000000",
+				"@media": {
+					"(max-width: 480px)": {
+						"padding": "16px",
+					},
+				},
+			},
+			"#canvas": {
+				"width": "100%",
 			},
 		})),
 	]),
@@ -37,6 +50,9 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				h("p", { id: "title", }, "小歌曲 Little Songs"),
 				h("p", { id: "artist", }, "旋转笔 SpinPen"),
 			]),
+			h("div", { class: "hstack g-8" }, links.map((l) => {
+				return h("a", { href: l.url }, l.name)
+			})),
 			h("div", { class: "vstack g-8" }, songs.map((s) => {
 				const name = s.replace(/\.mp3$/, "")
 				return h("div", { class: "vstack g-4" }, [

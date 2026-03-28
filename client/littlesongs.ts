@@ -17,20 +17,23 @@ import {
 } from "www/utils"
 
 const R = "/static/lilfang"
-const WIDTH = 480
-const HEIGHT = 480
+const SIZE = 480
 const ANIM_FPS = 8
 
 const g = createGame({
 	canvas: document.querySelector("#cover") as HTMLCanvasElement,
-	width: WIDTH,
-	height: HEIGHT,
+	width: SIZE,
+	height: SIZE,
 	background: [255, 255, 255],
 	// transparent: true,
 	allowScroll: true,
 	globalMousePos: true,
 })
 
+// TODO: this should be easier
+g.canvas.style.width = "100%"
+g.canvas.style.maxWidth = `${SIZE}px`
+g.canvas.style.height = `${g.canvas.getBoundingClientRect().width}px`
 g.focus()
 
 function seq(name: string, num: number) {
@@ -53,10 +56,10 @@ const assets = loadAssets({
 	},
 })
 
-let eyeFixed = isTouch
+let started = false
 
 function drawLilfang(opts: {
-	lookat: Vec2,
+	lookat: Vec2 | null,
 	pos: Vec2,
 	angle?: number,
 }) {
@@ -64,9 +67,7 @@ function drawLilfang(opts: {
 	// TODO: eye pos when rotating
 	const leftEyeCenter = vec2(-46, -9)
 	const rightEyeCenter = vec2(-16, -10)
-	const eyeDist = eyeFixed ? 0 : 1.5
-	const d1 = opts.lookat.sub(opts.pos.add(leftEyeCenter)).unit().scale(eyeDist)
-	const d2 = opts.lookat.sub(opts.pos.add(rightEyeCenter)).unit().scale(eyeDist)
+	const eyeDist = 2
 
 	g.pushTransform()
 	g.pushTranslate(opts.pos)
@@ -78,7 +79,10 @@ function drawLilfang(opts: {
 	})
 
 	g.pushTransform()
-	g.pushTranslate(leftEyeCenter.add(d1))
+	g.pushTranslate(leftEyeCenter)
+	if (opts.lookat) {
+		g.pushTranslate(opts.lookat.sub(opts.pos.add(leftEyeCenter)).unit().scale(eyeDist))
+	}
 	g.drawSprite({
 		sprite: assets.sprites["eye"],
 		frame: framen(3),
@@ -87,7 +91,10 @@ function drawLilfang(opts: {
 	g.popTransform()
 
 	g.pushTransform()
-	g.pushTranslate(rightEyeCenter.add(d2))
+	g.pushTranslate(rightEyeCenter)
+	if (opts.lookat) {
+		g.pushTranslate(opts.lookat.sub(opts.pos.add(rightEyeCenter)).unit().scale(eyeDist))
+	}
 	g.drawSprite({
 		sprite: assets.sprites["eye"],
 		frame: framen(3),
@@ -106,10 +113,9 @@ g.run(() => {
 	}
 
 	const mpos = g.mousePos()
-	const lookat = mpos
 
-	if (g.isKeyPressed("space")) {
-		eyeFixed = !eyeFixed
+	if (g.isMouseMoved()) {
+		started = true
 	}
 
 	g.pushTransform()
@@ -121,7 +127,7 @@ g.run(() => {
 	g.popTransform()
 
 	drawLilfang({
-		lookat: lookat,
+		lookat: started ? mpos : null,
 		pos: vec2(350, 400),
 	})
 

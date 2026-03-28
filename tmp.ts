@@ -20,7 +20,6 @@ import {
 	HOUR,
 	fmtBytes,
 } from "www/utils"
-// import type { Handler } from "./www"
 
 const MAX_SIZE = MB * 64
 const EXPIRE_TIME = MONTH * 30
@@ -35,7 +34,7 @@ type DBFile = {
 	hash: string,
 	type: string,
 	size: number,
-	data: Uint8Array,
+	data: Uint8Array<ArrayBuffer>,
 }
 
 const dataTable = db.table<DBFile>("data", {
@@ -61,13 +60,13 @@ function appendCharsetUTF8(mime: string): string {
 }
 
 const gate = (handler: Handler): Handler => {
-	return (ctx) => {
+	return (ctx, next) => {
 		const { req, res } = ctx
 		const auth = req.headers.get("Authorization")
 		if (auth !== `Bearer ${TOKEN}`) {
 			throw new HTTPError(401, "nope")
 		}
-		return handler(ctx)
+		return handler(ctx, next)
 	}
 }
 

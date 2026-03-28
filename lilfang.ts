@@ -11,6 +11,9 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 			"*": {
 				// "cursor": "none",
 			},
+			"body": {
+				"padding": "64px",
+			},
 		}))
 	]),
 	h("body", {}, [

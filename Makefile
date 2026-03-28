@@ -1,6 +1,8 @@
 DEPLOY_HOST = tga@space55.xyz
 DEPLOY_DIR = /home/tga/space55.xyz
 DEPLOY_SERVICE = space55.xyz
+QR_SRC = $(wildcard static/qr/*.txt)
+QR_TARGETS = $(patsubst %.txt, %.png, $(QR_SRC))
 
 .PHONY: dev
 dev:
@@ -29,6 +31,14 @@ status:
 .PHONY: check
 check:
 	bunx tsc
+
+.PHONY: qr
+qr: $(QR_TARGETS)
+
+static/qr/%.png: static/qr/%.txt
+	qrencode --read-from "$<" -s 16 -o qr.png
+	magick qr.png -transparent white -trim "$@"
+	rm qr.png
 
 .PHONY: links
 links:
