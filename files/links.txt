@@ -191,14 +191,17 @@ https://alf-s-room.com
 https://anarchivism.org/w/Main_Page
 https://andihagen.wordpress.com
 https://androidarts.com
+https://animationfactory.com/
 https://apl385.com
 https://archive.org/details/winampskins
 https://archiveteam.org
 https://babelia.libraryofbabel.info
 https://bellard.org/mersenne.html
+https://ben-mini.com/2024/img-0416
 https://billwurtz.com
 https://blog.geocities.institute
 https://blueberrysoft.ryliejamesthomas.net/
+https://boing.greg.technology/
 https://bonzi.link
 https://bus-stop.net
 https://bytecellar.com
@@ -248,6 +251,7 @@ https://flottantpigbit.blogspot.co.uk
 https://fms.komkon.org
 https://forums.tigsource.com/index.php?topic=49317.0
 https://fossies.org
+https://frutigeraeroarchive.org/
 https://futureblues.com
 https://geocities.restorativland.org
 https://gifcities.org
@@ -290,6 +294,7 @@ https://myfriendpokey.tumblr.com
 https://myfurbyworld.neocities.org
 https://myspace.windows93.net
 https://nervetower.neocities.org/main
+https://ninidesign.art/
 https://no-intro.org
 https://noclip.website
 https://nopaint.art
@@ -299,6 +304,7 @@ https://obsoletemedia.org
 https://oliverblueberry.neocities.org
 https://opengameart.org/content/seamless-sky-backgrounds#
 https://orb.farm
+https://ourworldofpixels.com/
 https://patentimages.storage.googleapis.com/c2/d4/f4/193f7f21978e8d/US7402104.pdf
 https://pbjabcusa.com
 https://petittube.com
@@ -318,6 +324,7 @@ https://sandspiel.club/
 https://satoarchives.com
 https://sciops.net
 https://screamingbrainstudios.com/
+https://seagullsofkristiansund.blogspot.com/
 https://sebaldsfolly.blogspot.com/2015/06/skaters-james-ferraro-spencer-clark.html
 https://simone.computer/#/webdesktops
 https://simplifier.neocities.org
@@ -342,9 +349,11 @@ https://tmpout.sh
 https://tokipona.org/
 https://tomtilley.net/projects/pvc
 https://tools.ietf.org/html/rfc7168
+https://torikudo.com/archive/%e5%bf%83%e3%81%a8%e9%ad%82%e3%81%a8%e6%80%9d%e3%81%84-heart-and-soul-and-mind/
 https://tryapl.org
 https://txstc55.github.io/ugly-avatar/
 https://unicornify.pictures
+https://unicornjelly.com/
 https://vgmdb.net
 https://vimm.net
 https://vistaserv.net
@@ -361,6 +370,7 @@ https://web.archive.org/web/20050522035223/http://geocities.com/TimesSquare/Fort
 https://web.archive.org/web/20091026235809/http://geocities.com/dinobiscuits
 https://web.archive.org/web/20170325000321/http://www.templeos.org/Wb/Doc/HolyC.html
 https://web.stanford.edu/class/history34q/readings/textualizingscience/library_of_babel.html
+https://webtiles.kicya.net/
 https://wiby.me
 https://wiki.wetfish.net
 https://wiki.xxiivv.com/site/solresol.html
@@ -369,6 +379,7 @@ https://worldwideweb.cern.ch
 https://www-ui.is.s.u-tokyo.ac.jp/~takeo/chameleon/chameleon.htm
 https://www.1000manifestos.com
 https://www.abandonware-magazines.org/index.php
+https://www.abelard.org/index.htm
 https://www.alansondheim.org/
 https://www.angelfire.com/trek/caver
 https://www.angio.net/pi
@@ -419,6 +430,7 @@ https://www.jellygummies.com
 https://www.jeremycouillard.com
 https://www.johnclilly.com/eccox.html
 https://www.jsoftware.com/ioj/iojATW.htm
+https://www.kbs-kyoto.co.jp/radio/jam/
 https://www.kickscondor.com
 https://www.kickscondor.com/taia777-archive/
 https://www.kpopp.io
@@ -430,8 +442,10 @@ https://www.magicmouse.com/h_flyingc.html
 https://www.markermusic.com/
 https://www.marxists.org/
 https://www.mathpages.com/
+https://www.mcmaster.com/
 https://www.milfordgraves.com
 https://www.mit.edu/~xela/tao.html
+https://www.mmjp.or.jp/m_satoh/
 https://www.models-resource.com
 https://www.models-resource.com/3ds/pokemonxy
 https://www.mogdogblog.com/home
@@ -452,6 +466,7 @@ https://www.planetemu.net
 https://www.plugsocketmuseum.nl
 https://www.pouet.net/prod.php?which=12036
 https://www.press.tokai.ac.jp/issu/fish/fishes_of_Japan.html
+https://www.rainbowsbridge.com/hello.htm
 https://www.random.org
 https://www.retrogames.cz/index.php
 https://www.rfchumor.com
@@ -463,6 +478,8 @@ https://www.sacred-texts.com/cdshop/dvd90/index.htm
 https://www.sanbasestudio.com/
 https://www.sbnation.com/a/17776-football
 https://www.scottaaronson.com/writings/bignumbers.html
+https://www.sej.co.jp/products/a/item/105405/
+https://www.serebii.net/
 https://www.sharecart1000.com
 https://www.spacejam.com
 https://www.spriters-resource.com

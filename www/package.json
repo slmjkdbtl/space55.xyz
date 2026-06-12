@@ -2,8 +2,9 @@
 	"name": "www",
 	"type": "module",
 	"devDependencies": {
-		"@types/bun": "1.3.0",
-		"typescript": "5.9.3"
+		"@types/bun": "1.3.11",
+		"@types/node": "25.5.0",
+		"typescript": "6.0.2"
 	},
 	"exports": {
 		"./server": "./server.ts",

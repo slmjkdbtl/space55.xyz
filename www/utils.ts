@@ -230,53 +230,7 @@ export const WEEK = DAY * 7
 export const MONTH = DAY * 30
 export const YEAR = DAY * 365
 
-export type CronUnit = string
-export type CronRule =
-	| `${CronUnit} ${CronUnit} ${CronUnit} ${CronUnit} ${CronUnit}`
-	| "yearly"
-	| "monthly"
-	| "weekly"
-	| "daily"
-	| "hourly"
-	| "minutely"
-
-const isReal = (n: any) => n !== undefined && n !== null && !isNaN(n)
-
-// TODO: support intervals
-export function cron(rule: CronRule, action: () => void) {
-	if (rule === "yearly") return cron("0 0 1 1 *", action)
-	if (rule === "monthly") return cron("0 0 1 * *", action)
-	if (rule === "weekly") return cron("0 0 * * 0", action)
-	if (rule === "daily") return cron("0 0 * * *", action)
-	if (rule === "hourly") return cron("0 * * * *", action)
-	if (rule === "minutely") return cron("* * * * *", action)
-	let paused = false
-	const [min, hour, date, month, day] = rule
-		.split(" ")
-		.map((def) => def === "*" ? "*" : new Set(def.split(",").map(Number).filter(isReal)))
-	function run() {
-		if (paused) return
-		const now = new Date()
-		if (month !== "*" && !month.has(now.getUTCMonth() + 1)) return
-		if (date !== "*" && !date.has(now.getUTCDate())) return
-		if (day !== "*" && !day.has(now.getUTCDay())) return
-		if (hour !== "*" && !hour.has(now.getUTCHours())) return
-		if (min !== "*" && !min.has(now.getUTCMinutes())) return
-		action()
-	}
-	const timeout = setInterval(run, 1000 * 60)
-	run()
-	return {
-		action: action,
-		cancel: () => clearInterval(timeout),
-		get paused() {
-			return paused
-		},
-		set paused(p) {
-			paused = p
-		},
-	}
-}
+export const isReal = (n: any) => n !== undefined && n !== null && !isNaN(n)
 
 export function fmtBytes(bytes: number, decimals: number = 2) {
 	if (bytes === 0) return "0b"
@@ -313,4 +267,66 @@ export function download(filename: string, url: string) {
 	a.href = url
 	a.download = filename
 	a.click()
+}
+
+export async function wait(t: number) {
+	return new Promise((resolve) => {
+		setTimeout(() => {
+			resolve(undefined)
+		}, t)
+	})
+}
+
+// TODO: time spike on tab switch
+export function run(action: () => void) {
+
+	let paused = false
+	let stopped = false
+	let loopID: null | number = null
+	let dt = 0
+	let time = 0
+	let realTime = 0
+
+	const frame = (t: number) => {
+
+		if (stopped) return
+
+		if (document.visibilityState !== "visible") {
+			loopID = requestAnimationFrame(frame)
+			return
+		}
+
+		const loopTime = t / 1000
+
+		dt = loopTime - realTime
+		realTime = loopTime
+		time += dt
+		action()
+		loopID = requestAnimationFrame(frame)
+
+	}
+
+	loopID = requestAnimationFrame(frame)
+
+	return {
+		get paused() {
+			return paused
+		},
+		set paused(p: boolean) {
+			paused = p
+		},
+		get stopped() {
+			return stopped
+		},
+		set stopped(s: boolean) {
+			stopped = s
+		},
+		get dt() {
+			return dt
+		},
+		get time() {
+			return time
+		},
+	}
+
 }

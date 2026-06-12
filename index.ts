@@ -111,7 +111,7 @@ const styles = {
 	"a": {
 		"outline": "0",
 		":hover": {
-			"cursor": "url(/static/img/cursors/2.png), default",
+			"cursor": "url(/static/img/cursor2.png), default",
 		},
 	},
 	".box": {

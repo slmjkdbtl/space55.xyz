@@ -18,51 +18,54 @@ export type HTMLAttr =
 // html text builder
 export function h(
 	tag: string,
-	attrs: Record<string, HTMLAttr>,
+	attrs?: Record<string, HTMLAttr>,
 	children?: HTMLChildren
 ) {
 
 	let html = `<${tag}`
 	const nl = Array.isArray(children) ? "\n" : ""
+	const hasChildren = children !== undefined && children !== null
 
-	for (const k in attrs) {
-		let v = attrs[k]
-		switch (typeof v) {
-			case "boolean":
-				if (v === true) {
-					html += ` ${k}`
-				}
-				break
-			case "string":
-				html += ` ${k}="${Bun.escapeHTML(v)}"`
-				break
-			case "number":
-				html += ` ${k}=${v}`
-				break
-			case "object":
-				const value = Array.isArray(v) ? v.filter((p) => p).join(" ") : style(v)
-				html += ` ${k}="${Bun.escapeHTML(value)}"`
-				break
-		}
-	}
-
-	html += ">" + nl
-
-	if (Array.isArray(children)) {
-		for (const child of children) {
-			if (!child) continue
-			if (Array.isArray(child)) {
-				html += h("div", {}, child) + "\n"
-			} else {
-				html += child + "\n"
+	if (attrs) {
+		for (const k in attrs) {
+			let v = attrs[k]
+			switch (typeof v) {
+				case "boolean":
+					if (v === true) {
+						html += ` ${k}`
+					}
+					break
+				case "string":
+					html += ` ${k}="${Bun.escapeHTML(v)}"`
+					break
+				case "number":
+					html += ` ${k}=${v}`
+					break
+				case "object":
+					const value = Array.isArray(v) ? v.filter((p) => p).join(" ") : style(v)
+					html += ` ${k}="${Bun.escapeHTML(value)}"`
+					break
 			}
 		}
-	} else if (children) {
-		html += children
 	}
 
-	if (children !== undefined && children !== null) {
+	if (hasChildren) {
+		html += ">" + nl
+		if (Array.isArray(children)) {
+			for (const child of children) {
+				if (!child) continue
+				if (Array.isArray(child)) {
+					html += h("div", {}, child) + "\n"
+				} else {
+					html += child + "\n"
+				}
+			}
+		} else if (children) {
+			html += children
+		}
 		html += `</${tag}>`
+	} else {
+		html += " />"
 	}
 
 	return html

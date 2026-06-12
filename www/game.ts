@@ -3,7 +3,7 @@
 // TODO: ui, flexbox style layout
 
 if (typeof window === "undefined") {
-	throw new Error("app.ts only runs in browser")
+	throw new Error("game.ts only runs in browser")
 }
 
 import {
