@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"noEmit": true,
+		"lib": ["esnext", "dom"],
+		"types": ["node", "bun"],
+		"module": "esnext",
+		"moduleDetection": "force",
+		"skipLibCheck": true,
+		"allowImportingTsExtensions": true,
+		"allowSyntheticDefaultImports": true,
+		"forceConsistentCasingInFileNames": true
+	}
+}
