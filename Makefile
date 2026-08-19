@@ -36,9 +36,8 @@ check:
 qr: $(QR_TARGETS)
 
 static/qr/%.png: static/qr/%.txt
-	qrencode --read-from "$<" -s 16 -o qr.png
-	magick qr.png -transparent white -trim "$@"
-	rm qr.png
+	qrencode --read-from "$<" -s 16 -o - \
+		| magick - -transparent white -trim "$@"
 
 .PHONY: links
 links:

@@ -1,17 +1,34 @@
-import * as fs from "fs"
+import * as fs from "fs/promises"
 import * as path from "path"
 import { h, css, csslib, } from "www/html"
 import scripts from "./scripts"
 
-const DIR = "files/poop"
+type File = {
+	title: string,
+	content: string,
+	path: string,
+}
 
-const entries = fs.readdirSync(DIR)
-	.filter((entry) => !entry.startsWith(".") && entry.endsWith(".txt"))
-	.sort((a, b) => a > b ? -1 : 1)
-	.map((f) => ({
-		title: path.basename(f, ".txt"),
-		content: fs.readFileSync(path.join(DIR, f), "utf8")
-	}))
+async function getFiles(dir: string): Promise<File[]> {
+	return Promise.all(
+		(await fs.readdir(dir))
+			.filter((entry) => !entry.startsWith(".") && entry.endsWith(".txt"))
+			.sort((a, b) => a > b ? -1 : 1)
+			.map(async (f) => {
+				const p = path.join(dir, f)
+				return {
+					title: path.basename(f, ".txt"),
+					content: await fs.readFile(p, "utf8"),
+					path: p,
+				}
+			})
+	)
+}
+
+const files = (await Promise.all([
+	"files/poop",
+	"files/reality",
+].map(getFiles))).flat()
 
 export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("head", {}, [
@@ -52,7 +69,7 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("body", {}, [
 		h("main", { class: "vstack g-64" }, [
 			h("img", { src: "/static/img/smile.gif", class: "w-20" }),
-			h("div", { class: "vstack g-32" }, entries.map(({ title, content }) => {
+			h("div", { class: "vstack g-32" }, files.map(({ title, content }) => {
 				return h("div", { class: "vstack g-8" }, [
 					h("p", { class: "title" }, title),
 					h("p", { class: "content" }, content),
