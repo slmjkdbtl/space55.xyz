@@ -1,10 +1,10 @@
-1. Dragonite 快龙
-2. Shuckle 壶壶
-3. Togekiss 波克基斯
-4. Bewear 穿着熊
-5. Shaymin 谢米
-6. Poliwhirl 蚊香蛙
-7. Ditto 百变怪
-8. Gengar 耿鬼
-9. Exeggutor (Alolan) 椰蛋树（阿罗拉形态）
-10. Jirachi 吉拉祈
+0. Dragonite 快龙
+1. Shuckle 壶壶
+2. Poliwhirl 蚊香蛙
+3. Wooper 乌波
+4. Ditto 百变怪
+5. Jirachi 吉拉祈
+6. Shaymin 谢米
+7. Gengar 耿鬼
+8. Bewear 穿着熊
+9. Togekiss 波克基斯

@@ -10,6 +10,7 @@ import days from "./days"
 import resume from "./resume"
 import littlesongs from "./littlesongs"
 import lilfang from "./lilfang"
+import raccoon from "./raccoon"
 import * as blog from "./blog"
 import * as tmp from "./tmp"
 
@@ -29,6 +30,7 @@ server.use(route("GET", "/days", ({ res }) => res.sendHTML(days)))
 server.use(route("GET", "/resume", ({ res }) => res.sendHTML(resume)))
 server.use(route("GET", "/littlesongs", ({ res }) => res.sendHTML(littlesongs)))
 server.use(route("GET", "/lilfang", ({ res }) => res.sendHTML(lilfang)))
+server.use(route("GET", "/raccoon", ({ res }) => res.sendHTML(raccoon)))
 server.use(blog.router.mount("/blog"))
 server.use(route("GET", "/randomlink", ({ res }) => res.redirect(randItem(links))))
 server.use(tmp.router.mount("/tmp"))

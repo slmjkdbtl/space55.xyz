@@ -1,0 +1,47 @@
+{ "frames": [
+   {
+    "filename": "wizard 0.ase",
+    "frame": { "x": 0, "y": 0, "w": 68, "h": 82 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 68, "h": 82 },
+    "sourceSize": { "w": 68, "h": 82 },
+    "duration": 100
+   },
+   {
+    "filename": "wizard 1.ase",
+    "frame": { "x": 68, "y": 0, "w": 68, "h": 82 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 68, "h": 82 },
+    "sourceSize": { "w": 68, "h": 82 },
+    "duration": 100
+   },
+   {
+    "filename": "wizard 2.ase",
+    "frame": { "x": 136, "y": 0, "w": 68, "h": 82 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 68, "h": 82 },
+    "sourceSize": { "w": 68, "h": 82 },
+    "duration": 100
+   }
+ ],
+ "meta": {
+  "app": "https://www.aseprite.org/",
+  "version": "1.3.18.1-arm64",
+  "image": "wizard.png",
+  "format": "RGBA8888",
+  "size": { "w": 204, "h": 82 },
+  "scale": "1",
+  "frameTags": [
+  ],
+  "layers": [
+   { "name": "raccoon", "opacity": 255, "blendMode": "normal" },
+   { "name": "wand", "opacity": 255, "blendMode": "normal" },
+   { "name": "hat", "opacity": 255, "blendMode": "normal" }
+  ],
+  "slices": [
+  ]
+ }
+}

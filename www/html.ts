@@ -237,6 +237,7 @@ export const c: Record<string, StyleSheet> = {
 	"hidden": { "display": "none" },
 	"inline": { "display": "inline" },
 	"inline-block": { "display": "inline-block" },
+	"block": { "display": "block" },
 	"relative": { "position": "relative" },
 	"absolute": { "position": "absolute" },
 	"fixed": { "position": "fixed" },

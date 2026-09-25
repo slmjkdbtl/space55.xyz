@@ -371,6 +371,11 @@ export type SpriteAnim = {
 
 export type SpriteAnims = Record<string, SpriteAnim>
 
+export type LoadVideoOpt = TextureOpt & {
+	loop?: boolean,
+	muted?: boolean,
+}
+
 export interface LoadBitmapFontOpt {
 	chars?: string,
 	filter?: TexFilter,
@@ -464,6 +469,16 @@ export default class TexPacker {
 export type DrawSpriteOpt = RenderProps & {
 	sprite: SpriteData,
 	frame?: number,
+	width?: number,
+	height?: number,
+	flipX?: boolean,
+	flipY?: boolean,
+	quad?: Quad,
+	anchor?: Anchor | Vec2,
+}
+
+export type DrawVideoOpt = RenderProps & {
+	video: VideoData,
 	width?: number,
 	height?: number,
 	flipX?: boolean,
@@ -635,6 +650,24 @@ export class SpriteData {
 		this.anims = anims
 		this.width = width
 		this.height = height
+	}
+}
+
+export class VideoData {
+	tex: Texture
+	vid: HTMLVideoElement
+	constructor(tex: Texture, vid: HTMLVideoElement) {
+		this.tex = tex
+		this.vid = vid
+	}
+	update() {
+		this.tex.update(this.vid)
+	}
+	get width() {
+		return this.vid.videoWidth
+	}
+	get height() {
+		return this.vid.videoHeight
 	}
 }
 
@@ -843,6 +876,13 @@ export class Texture {
 
 	static fromImage(ctx: GLCtx, img: ImageSource, opt: TextureOpt = {}): Texture {
 		const tex = new Texture(ctx, img.width, img.height, opt)
+		tex.update(img)
+		tex.src = img
+		return tex
+	}
+
+	static fromVideo(ctx: GLCtx, img: HTMLVideoElement, opt: TextureOpt = {}): Texture {
+		const tex = new Texture(ctx, img.videoWidth, img.videoHeight, opt)
 		tex.update(img)
 		tex.src = img
 		return tex
@@ -1370,6 +1410,7 @@ function alignPt(align: TextAlign): number {
 
 export type AssetsEntries = {
 	sprites?: Record<string, Promise<SpriteData>>,
+	videos?: Record<string, Promise<VideoData>>,
 	audio?: Record<string, Promise<AudioData>>,
 	sounds?: Record<string, Promise<SoundData>>,
 	fonts?: Record<string, Promise<FontData>>,
@@ -1383,6 +1424,7 @@ export type Assets = {
 	num: number,
 	progress: number,
 	sprites: Record<string, SpriteData>,
+	videos: Record<string, VideoData>,
 	audio: Record<string, AudioData>,
 	sounds: Record<string, SoundData>,
 	fonts: Record<string, FontData>,
@@ -1398,6 +1440,7 @@ export function loadAssets(entries: AssetsEntries): Assets {
 	let numLoaded = 0
 	const onReadyEvent = new Event()
 	let sprites: Record<string, SpriteData> = {}
+	let videos: Record<string, VideoData> = {}
 	let audio: Record<string, AudioData> = {}
 	let sounds: Record<string, SoundData> = {}
 	let fonts: Record<string, FontData> = {}
@@ -1426,6 +1469,9 @@ export function loadAssets(entries: AssetsEntries): Assets {
 	const tasks = [
 		loadMap<SpriteData>(entries.sprites ?? {}).then((s) => {
 			Object.assign(sprites, s)
+		}),
+		loadMap<VideoData>(entries.videos ?? {}).then((s) => {
+			Object.assign(videos, s)
 		}),
 		loadMap<AudioData>(entries.audio ?? {}).then((s) => {
 			Object.assign(audio, s)
@@ -1462,6 +1508,7 @@ export function loadAssets(entries: AssetsEntries): Assets {
 			return numLoaded >= num
 		},
 		sprites,
+		videos,
 		audio,
 		fonts,
 		bitmapFonts,
@@ -2565,6 +2612,16 @@ export function createGame(gopt: CreateGameOpts = {}) {
 
 	}
 
+	function drawVideo(opt: DrawVideoOpt) {
+		if (!opt.video) {
+			throw new Error("drawVideo() requires property \"video\"")
+		}
+		drawTexture({
+			...opt,
+			tex: opt.video.tex,
+		})
+	}
+
 	function drawCanvas(opt: DrawCanvasOpt) {
 		drawTexture({
 			...opt,
@@ -2946,7 +3003,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		let font = opt.font ?? DEF_FONT
 
 		const { charStyleMap, text } = compileStyledText(opt.text + "")
-		const chars = text.split("")
+		const chars = [...text]
 
 		// if it's not bitmap font, we draw it with 2d canvas or use cached image
 		if (font instanceof FontData || typeof font === "string") {
@@ -3341,6 +3398,32 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		return frames
 	}
 
+	async function loadAsepriteJSON(src: string): Promise<LoadSpriteOpt> {
+		const res = await fetch(src)
+		const data = await res.json()
+		const w = data.meta.size.w
+		const h = data.meta.size.h
+		// @ts-ignore
+		const frames = data.frames.map(({ frame }) => new Quad(
+			frame.x / w,
+			frame.y / h,
+			frame.w / w,
+			frame.h / h,
+		))
+		const anims = {}
+		for (const a of data.meta.frameTags) {
+			// @ts-ignore
+			anims[a.name] = {
+				from: a.from,
+				to: a.to,
+			}
+		}
+		return {
+			frames,
+			anims,
+		}
+	}
+
 	// TODO: support texture opt here?
 	async function loadSprite(src: string, opt: LoadSpriteOpt = {}): Promise<SpriteData> {
 		const img = await loadImg(src)
@@ -3372,6 +3455,30 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		const w = frames[0].tex.width * frames[0].quad.w
 		const h = frames[0].tex.height * frames[0].quad.h
 		return new SpriteData(frames, opt.anims ?? {}, w, h)
+	}
+
+	async function loadAsepriteSpritesheet(imgSrc: string, jsonSrc?: string): Promise<SpriteData> {
+		if (!jsonSrc) {
+			let base = imgSrc
+			imgSrc = base + ".png"
+			jsonSrc = base + ".json"
+		}
+		return loadSprite(imgSrc, await loadAsepriteJSON(jsonSrc))
+	}
+
+	async function loadVideo(src: string, opts: LoadVideoOpt = {}): Promise<VideoData> {
+		const vid = document.createElement("video")
+		vid.src = src
+		vid.playsInline = true
+		vid.loop = opts.loop !== false
+		vid.muted = opts.muted !== false
+		if (vid.readyState < HTMLMediaElement.HAVE_METADATA) {
+			await new Promise((resolve, reject) => {
+				vid.addEventListener("loadedmetadata", resolve, { once: true })
+				vid.addEventListener("error", reject, { once: true })
+			})
+		}
+		return new VideoData(Texture.fromVideo(glCtx, vid), vid)
 	}
 
 	async function loadBitmapFont(
@@ -3579,10 +3686,11 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		onScroll,
 		onHide,
 		onShow,
-		events: app.events,
 
 		loadSprite,
 		loadSpritesAnim,
+		loadAsepriteSpritesheet,
+		loadVideo,
 		loadAudio,
 		loadSound,
 		loadFont,
@@ -3592,6 +3700,7 @@ export function createGame(gopt: CreateGameOpts = {}) {
 		width,
 		height,
 		drawSprite,
+		drawVideo,
 		drawCanvas,
 		drawRect,
 		drawCircle,
