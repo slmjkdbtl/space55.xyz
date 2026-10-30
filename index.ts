@@ -1,5 +1,13 @@
 import { h, css, csslib } from "www/html"
 
+const things = [
+	{ name: "music", link: "/music" },
+	{ name: "blog", link: "/blog" },
+	{ name: "games", link: "/games" },
+	{ name: "lilfang", link: "/lilfang" },
+	{ name: "poop", link: "/poop" },
+]
+
 export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 	h("head", {}, [
 		h("title", {}, "tga"),
@@ -14,8 +22,8 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				"padding": "0",
 			},
 			"html": {
-				"font-size": "20px",
-				"font-family": "Arial",
+				"font-size": "16px",
+				"font-family": "Helvetica, Arial, sans-serif;",
 				"color": "black",
 			},
 			"body": {
@@ -27,12 +35,11 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				"color": "black",
 				"img": {
 					"position": "absolute",
-				"transition": "0.25s transform",
+					"transition": "0.25s transform",
 				},
 				"p": {
 					"position": "absolute",
-					// TODO
-					"width": "100px",
+					"width": "max-content",
 				},
 				":hover": {
 					"img": {
@@ -41,11 +48,11 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				},
 				"&.music": {
 					"position": "absolute",
-					"top": "40px",
-					"left": "80px",
+					"top": "30px",
+					"left": "60px",
 					"img": {
-						"left": "32px",
-						"width": "160px",
+						"left": "30px",
+						"width": "120px",
 					},
 					"p": {
 						"top": "20px",
@@ -53,59 +60,60 @@ export default "<!DOCTYPE html>" + h("html", { lang: "en" }, [
 				},
 				"&.blog": {
 					"position": "absolute",
-					"top": "220px",
-					"left": "200px",
+					"top": "160px",
+					"left": "170px",
 					"img": {
-						"width": "280px",
+						"width": "200px",
 					},
 					"p": {
-						"top": "100px",
-						"left": "270px",
+						"top": "0px",
+						"left": "210px",
 					},
 				},
 				"&.games": {
 					"position": "absolute",
-					"top": "300px",
-					"left": "60px",
+					"top": "220px",
+					"left": "50px",
 					"img": {
-						"width": "160px",
+						"width": "120px",
 					},
 					"p": {
-						"top": "270px",
-						"left": "160px",
+						"top": "120px",
+						"left": "130px",
 					},
 				},
 				"&.lilfang": {
 					"position": "absolute",
 					"top": "0",
-					"left": "400px",
+					"left": "340px",
 					"img": {
-						"width": "480px",
-						"left": "90px",
+						"width": "340px",
+						"left": "60px",
+						"top": "-1px",
 					},
 					"p": {
-						"top": "500px",
+						"top": "300px",
+					},
+				},
+				"&.poop": {
+					"position": "absolute",
+					"top": "410px",
+					"left": "260px",
+					"img": {
+						"width": "100px",
+						"top": "20px",
+						"left": "30px",
 					},
 				},
 			},
 		})),
 	]),
 	h("body", {}, [
-		h("a", { class: "box music", href: "https://slmjkdbtl.bandcamp.com/album/littlesongs" }, [
-			h("img", { src: "/static/img/music.svg" }),
-			h("p", {}, "music"),
-		]),
-		h("a", { class: "box blog", href: "/blog" }, [
-			h("img", { src: "/static/img/sun.svg" }),
-			h("p", {}, "blog"),
-		]),
-		h("a", { class: "box games", href: "/games" }, [
-			h("img", { src: "/static/img/games.svg" }),
-			h("p", {}, "games"),
-		]),
-		h("a", { class: "box lilfang", href: "/lilfang" }, [
-			h("img", { src: "/static/img/lilfang.svg" }),
-			h("p", {}, "lil fang"),
-		]),
+		...things.map(({ name, link }) => {
+			return h("a", { class: `box ${name}`, href: link }, [
+				h("img", { src: `/static/img/${name}.svg` }),
+				h("p", {}, name),
+			])
+		}),
 	]),
 ])
