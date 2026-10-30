@@ -1,9 +1,9 @@
 0. Dragonite 快龙
 1. Shuckle 壶壶
-2. Poliwhirl 蚊香蛙
-3. Wooper 乌波
-4. Ditto 百变怪
-5. Jirachi 吉拉祈
+2. Jirachi 吉拉祈
+3. Poliwhirl 蚊香蛙
+4. Wooper 乌波
+5. Ditto 百变怪
 6. Shaymin 谢米
 7. Gengar 耿鬼
 8. Bewear 穿着熊

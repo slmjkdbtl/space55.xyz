@@ -109,7 +109,7 @@ router.add("GET", "/", ({ res, req }) => {
 	const p = trimSlashEnd(req.url.pathname)
 	res.sendHTML("<!DOCTYPE html>" + h("html", { lang: "en" }, [
 		h("head", {}, [
-			h("title", {}, "space55 blog"),
+			h("title", {}, "tga | blog"),
 			h("meta", { charset: "utf-8", }),
 			h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
 			h("link", { rel: "icon", href: "/static/img/tga.png" }),
